@@ -1,0 +1,98 @@
+import { notFound } from "next/navigation";
+import Link from "next/link";
+import { obterNoticiaPorId } from "@/lib/admin-data";
+import { atualizarNoticia } from "../actions";
+
+export default async function PaginaEditarNoticia({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ salvo?: string; erro?: string }>;
+}) {
+  const { id } = await params;
+  const { salvo, erro } = await searchParams;
+  const noticia = await obterNoticiaPorId(id);
+  if (!noticia) notFound();
+
+  const acaoComId = atualizarNoticia.bind(null, id);
+
+  return (
+    <div className="max-w-3xl flex flex-col gap-6">
+      <div>
+        <Link href="/admin/noticias" className="text-xs text-slate-400 hover:underline">
+          ← Voltar para notícias
+        </Link>
+        <h1 className="font-display text-2xl font-bold text-navy mt-1">Editar notícia</h1>
+        <p className="text-sm text-slate-500 mt-1">
+          Status: <span className="font-semibold">{noticia.status}</span> · Editoria:{" "}
+          <span className="font-semibold">{noticia.editoria}</span> · Origem: {noticia.origem_ia} · Fonte:{" "}
+          <a href={noticia.fonte_url_original} className="text-esmeralda hover:underline" target="_blank" rel="noreferrer">
+            {noticia.fonte_credito ?? "ver original"}
+          </a>
+        </p>
+      </div>
+
+      {salvo && (
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm rounded-md px-3.5 py-2.5">
+          Alterações salvas.
+        </div>
+      )}
+      {erro && (
+        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-md px-3.5 py-2.5">
+          {erro === "campos_obrigatorios" ? "Título e conteúdo são obrigatórios." : `Erro ao salvar: ${erro}`}
+        </div>
+      )}
+
+      <form action={acaoComId} className="bg-white rounded-xl border border-slate-200 p-6 flex flex-col gap-5">
+        <div>
+          <label className="block text-sm font-semibold text-slate-700 mb-1">Título</label>
+          <input
+            name="titulo"
+            defaultValue={noticia.titulo}
+            required
+            className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-esmeralda"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-semibold text-slate-700 mb-1">Subtítulo</label>
+          <input
+            name="subtitulo"
+            defaultValue={noticia.subtitulo ?? ""}
+            className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-esmeralda"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-semibold text-slate-700 mb-1">Conteúdo</label>
+          <textarea
+            name="conteudo"
+            defaultValue={noticia.conteudo}
+            required
+            rows={14}
+            className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm font-mono leading-relaxed focus:outline-none focus:ring-2 focus:ring-esmeralda"
+          />
+          <p className="text-xs text-slate-400 mt-1">Parágrafos separados por linha em branco.</p>
+        </div>
+
+        <div className="flex gap-6">
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input type="checkbox" name="destaque" defaultChecked={noticia.destaque} className="rounded" />
+            Destaque (hero da home)
+          </label>
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input type="checkbox" name="urgente" defaultChecked={noticia.urgente} className="rounded" />
+            Urgente
+          </label>
+        </div>
+
+        <div className="pt-2 border-t border-slate-100 flex justify-end">
+          <button type="submit" className="bg-navy text-white font-semibold text-sm px-5 py-2.5 rounded-md hover:bg-slate-800">
+            Salvar alterações
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}

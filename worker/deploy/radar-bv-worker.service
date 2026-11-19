@@ -1,0 +1,43 @@
+# Unit systemd para rodar o worker do Radar BV direto com Node, sem Docker.
+# Alternativa mais simples pro servidor próprio: reinicia sozinho se cair,
+# e sobe de novo automaticamente quando o PC reinicia (depois de queda de
+# luz, troca pra solar, etc.).
+#
+# Instalação (como root, no servidor próprio):
+#   sudo cp deploy/radar-bv-worker.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now radar-bv-worker
+#
+# Ajuste WorkingDirectory e User para o caminho/usuário reais da máquina.
+
+[Unit]
+Description=Radar BV - Worker de coleta e publicacao automatizada
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/radar-bv/worker
+ExecStart=/usr/bin/node dist/index.js
+Restart=always
+RestartSec=10
+
+# Carrega as variáveis de ambiente (chaves de API, Supabase, etc.) do .env
+EnvironmentFile=/opt/radar-bv/worker/.env
+
+# Roda com um usuário dedicado, sem privilégio de root
+User=radarbv
+Group=radarbv
+
+# Limites de robustez: evita que o processo trave a máquina inteira se algo
+# der muito errado (ex.: loop de memória por bug numa lib)
+MemoryMax=512M
+Nice=5
+
+# Logs vão para o journal — ver com: journalctl -u radar-bv-worker -f
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=radar-bv-worker
+
+[Install]
+WantedBy=multi-user.target

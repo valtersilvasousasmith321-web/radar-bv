@@ -1,0 +1,18 @@
+services:
+  worker:
+    build: .
+    image: radar-bv-worker:latest
+    container_name: radar-bv-worker
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - TZ=America/Boa_Vista
+    # Sem "ports": o worker não recebe conexões de fora, só faz chamadas de
+    # saída (Supabase, Gemini, Claude, Groq, Unsplash/Pexels, webhook do
+    # WhatsApp) — não precisa expor nada na rede.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
