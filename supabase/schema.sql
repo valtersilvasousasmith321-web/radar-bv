@@ -278,6 +278,20 @@ values
   ('Polícia Civil de Roraima', 'https://pc.rr.gov.br/feed', 'rss', 'policia')
 on conflict do nothing;
 
+-- Temas de busca já prontos de fábrica — a IA já sai pesquisando esses temas
+-- sozinha a cada ciclo, sem precisar de nenhuma configuração manual extra.
+-- Um tema por editoria, cobrindo o fluxo diário de notícias.
+insert into fontes_monitoradas (nome, url_base, tipo, editoria_padrao)
+values
+  ('Busca: Boa Vista', 'notícias de Boa Vista hoje', 'busca', 'boa_vista'),
+  ('Busca: Roraima', 'notícias de Roraima hoje', 'busca', 'roraima'),
+  ('Busca: Polícia', 'ocorrências policiais em Boa Vista e Roraima', 'busca', 'policia'),
+  ('Busca: Política', 'política em Roraima e Boa Vista', 'busca', 'politica'),
+  ('Busca: Economia', 'economia em Roraima e Boa Vista', 'busca', 'economia'),
+  ('Busca: Esportes', 'esportes em Roraima e Boa Vista', 'busca', 'esportes'),
+  ('Busca: Brasil e Mundo', 'principais notícias do Brasil e do mundo hoje', 'busca', 'brasil_mundo')
+on conflict do nothing;
+
 -- Rede própria (interno_ecossistema) + banner de captação comercial
 insert into banners_publicidade
   (nome_anunciante, tipo_anunciante, posicao, imagem_url, link_destino, link_whatsapp, tags_contextuais, editorias_contextuais, prioridade, data_inicio)
