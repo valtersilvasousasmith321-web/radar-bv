@@ -13,12 +13,22 @@ export default function BannerAnuncio({ banner, variante = "caixa" }: { banner: 
 
   if (variante === "faixa") {
     return (
-      <div className="bg-white border-[1.5px] border-dashed border-slate-300 rounded-xl px-6 py-5 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <span className="text-[11px] text-slate-400 uppercase tracking-wide">Publicidade</span>
-          <h3 className="text-[17px] font-bold text-navy mt-1">{banner.nome_anunciante}</h3>
+      <div className="bg-white border-[1.5px] border-dashed border-slate-300 rounded-xl px-6 py-5 flex flex-wrap items-center justify-between gap-4 shadow-sm transition-shadow hover:shadow-md">
+        <div className="flex items-center gap-4">
+          {banner.imagem_url && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={banner.imagem_url}
+              alt={banner.nome_anunciante}
+              className="h-12 w-auto max-w-[140px] object-contain rounded-md"
+            />
+          )}
+          <div>
+            <span className="text-[11px] text-slate-400 uppercase tracking-wide">Publicidade</span>
+            <h3 className="text-[17px] font-bold text-navy mt-1">{banner.nome_anunciante}</h3>
+          </div>
         </div>
-        <a href={href} className="bg-esmeralda text-white font-semibold text-sm px-5 py-2.5 rounded-lg whitespace-nowrap hover:bg-emerald-700">
+        <a href={href} className="bg-gradient-to-r from-esmeralda to-emerald-600 text-white font-semibold text-sm px-5 py-2.5 rounded-lg whitespace-nowrap shadow-sm transition hover:shadow-md hover:brightness-110">
           {banner.tipo_anunciante === "captacao_anunciante" ? "Fale com o comercial" : "Saiba mais"}
         </a>
       </div>
@@ -26,13 +36,23 @@ export default function BannerAnuncio({ banner, variante = "caixa" }: { banner: 
   }
 
   return (
-    <div className="bg-white border border-slate-200 rounded-xl p-5">
+    <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
       <span className="text-[11px] text-slate-400 uppercase tracking-wide">Publicidade — rede Radar BV</span>
-      <div className="mt-3 bg-navy rounded-[10px] p-5 text-white">
-        <h3 className="text-base font-bold">{banner.nome_anunciante}</h3>
-        <a href={href} className="inline-block mt-3 bg-leitura text-navy text-[13px] font-semibold px-3.5 py-2 rounded-md hover:bg-white">
-          Saiba mais
-        </a>
+      <div className="mt-3 bg-gradient-to-br from-navy to-slate-900 rounded-[10px] overflow-hidden text-white shadow-md">
+        {banner.imagem_url && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={banner.imagem_url}
+            alt={banner.nome_anunciante}
+            className="w-full h-28 object-cover"
+          />
+        )}
+        <div className="p-5">
+          <h3 className="text-base font-bold">{banner.nome_anunciante}</h3>
+          <a href={href} className="inline-block mt-3 bg-leitura text-navy text-[13px] font-semibold px-3.5 py-2 rounded-md hover:bg-white">
+            Saiba mais
+          </a>
+        </div>
       </div>
     </div>
   );

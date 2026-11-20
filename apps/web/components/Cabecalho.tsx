@@ -22,7 +22,7 @@ export default function Cabecalho() {
         </div>
       </div>
 
-      <header className="bg-white border-b border-slate-200">
+      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-slate-200 shadow-sm">
         <div className="max-w-6xl mx-auto px-6 py-5 flex flex-wrap items-center justify-between gap-5">
           <Link href="/" aria-label="Radar BV — página inicial" className="flex items-baseline">
             <span className="font-display text-3xl font-bold text-navy tracking-tight">RADAR</span>
@@ -33,7 +33,10 @@ export default function Cabecalho() {
               <Link
                 key={e.slug}
                 href={`/editoria/${e.slug}`}
-                className={e.slug === "roraima" ? "text-esmeralda hover:text-urgente" : "hover:text-urgente"}
+                className={
+                  "relative py-1 transition-colors " +
+                  (e.slug === "roraima" ? "text-esmeralda hover:text-urgente" : "hover:text-urgente")
+                }
               >
                 {e.label}
               </Link>

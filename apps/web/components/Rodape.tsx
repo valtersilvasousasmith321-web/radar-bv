@@ -2,7 +2,7 @@ import Link from "next/link";
 
 export default function Rodape() {
   return (
-    <footer className="bg-navy text-slate-400 mt-auto">
+    <footer className="bg-gradient-to-b from-navy to-slate-950 text-slate-400 mt-auto">
       <div className="max-w-6xl mx-auto px-6 py-12 flex flex-wrap gap-10">
         <div className="flex-[2_1_260px]">
           <h2 className="font-display text-2xl font-bold text-white">
@@ -27,7 +27,7 @@ export default function Rodape() {
           <div className="flex flex-col gap-2.5 mt-4 text-[13px]">
             <a href="https://metadocexpress.com.br" className="hover:underline">Metadoc Express</a>
             <a href="https://azimutegeo.com.br" className="hover:underline">AzimuteGeo</a>
-            <Link href="/parceiros/agrimensura" className="hover:underline">Agrimensura e Topografia</Link>
+            <a href="https://wa.me/5595000000000?text=Quero%20saber%20sobre%20servi%C3%A7os%20de%20agrimensura" className="hover:underline">Agrimensura e Topografia</a>
           </div>
         </div>
         <div className="flex-1 min-w-[200px]">

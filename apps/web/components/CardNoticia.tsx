@@ -1,7 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import type { Noticia } from "@/lib/types";
-import { NOME_EDITORIA } from "@/lib/types";
+import { NOME_EDITORIA, ORIGEM_IA_LABEL } from "@/lib/types";
 import { tempoRelativo } from "@/lib/formato";
 
 const CORES_EDITORIA: Record<string, string> = {
@@ -39,7 +39,7 @@ function FotoOuPlaceholder({ noticia, altura }: { noticia: Noticia; altura: stri
 /** Card compacto (lista em grid de editoria) */
 export function CardNoticiaCompacto({ noticia }: { noticia: Noticia }) {
   return (
-    <article className="bg-white border border-slate-200 rounded-[10px] overflow-hidden transition hover:shadow-lg hover:-translate-y-0.5">
+    <article className="bg-white border border-slate-200 rounded-[10px] overflow-hidden shadow-sm transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5">
       <Link href={`/noticia/${noticia.slug}`}>
         <FotoOuPlaceholder noticia={noticia} altura="h-[120px]" />
       </Link>
@@ -80,26 +80,33 @@ export function CardNoticiaLinha({ noticia }: { noticia: Noticia }) {
 /** Card de destaque principal (hero) */
 export function CardNoticiaDestaque({ noticia }: { noticia: Noticia }) {
   return (
-    <article className="md:col-span-2 bg-white border border-slate-200 rounded-xl overflow-hidden transition hover:shadow-lg hover:-translate-y-0.5">
-      <Link href={`/noticia/${noticia.slug}`}>
+    <article className="md:col-span-2 bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm transition-all duration-200 hover:shadow-xl hover:-translate-y-0.5">
+      <Link href={`/noticia/${noticia.slug}`} className="relative block">
         <FotoOuPlaceholder noticia={noticia} altura="h-[320px]" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-navy/40 to-transparent" />
       </Link>
       <div className="p-6">
         <span className={`font-bold text-xs uppercase tracking-wide ${CORES_EDITORIA[noticia.editoria]}`}>
           {NOME_EDITORIA[noticia.editoria]}
         </span>
         <h2 className="font-display text-[26px] font-bold text-navy mt-2 leading-tight">
-          <Link href={`/noticia/${noticia.slug}`} className="hover:text-urgente">
+          <Link href={`/noticia/${noticia.slug}`} className="hover:text-urgente transition-colors">
             {noticia.titulo}
           </Link>
         </h2>
         {noticia.subtitulo && <p className="text-[15px] text-slate-500 mt-2.5 leading-relaxed">{noticia.subtitulo}</p>}
-        <div className="flex items-center gap-2 mt-4 text-xs text-slate-400">
+        <div className="flex items-center gap-2 mt-4 text-xs text-slate-400 flex-wrap">
           <span className="bg-slate-100 text-slate-700 font-semibold px-2 py-0.5 rounded-full">
-            Redigido por {noticia.origem_ia === "claude" ? "Claude" : noticia.origem_ia === "gemini" ? "Gemini" : "IA"}
+            Redigido por {ORIGEM_IA_LABEL[noticia.origem_ia]}
           </span>
-          <span>•</span>
-          <span>Fonte: {noticia.fonte_credito}</span>
+          {noticia.fonte_credito && (
+            <>
+              <span>•</span>
+              <a href={noticia.fonte_url_original} className="hover:text-navy hover:underline">
+                Fonte: {noticia.fonte_credito}
+              </a>
+            </>
+          )}
           <span>•</span>
           <span>{tempoRelativo(noticia.data_publicacao)}</span>
         </div>

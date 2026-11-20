@@ -170,7 +170,7 @@ export const BANNERS_DEMO: Record<string, Banner> = {
     tipo_anunciante: "interno_ecossistema",
     posicao: "rodape",
     imagem_url: null,
-    link_destino: "/parceiros/agrimensura",
-    link_whatsapp: null,
+    link_destino: null,
+    link_whatsapp: "https://wa.me/5595000000000?text=Quero%20saber%20sobre%20servi%C3%A7os%20de%20agrimensura",
   },
 };

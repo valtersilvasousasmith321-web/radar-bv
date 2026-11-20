@@ -124,14 +124,14 @@ export default async function PaginaNoticia({ params }: ParametrosRota) {
 
         <aside className="flex-[1_1_280px] min-w-[260px] flex flex-col gap-6">
           <BannerAnuncio banner={await getBanner("lateral")} />
-          <div className="bg-esmeralda rounded-xl p-5 text-white">
+          <div className="bg-gradient-to-br from-esmeralda to-emerald-700 rounded-xl p-5 text-white shadow-md">
             <h3 className="text-base font-bold">Receba no WhatsApp</h3>
             <p className="text-[13px] text-emerald-100 mt-1.5 leading-relaxed">
               Resumo das principais notícias direto no seu grupo ou canal.
             </p>
             <a
               href="https://wa.me/5595000000000"
-              className="inline-block mt-3 bg-white text-emerald-800 text-[13px] font-bold px-3.5 py-2 rounded-md"
+              className="inline-block mt-3 bg-white text-emerald-800 text-[13px] font-bold px-3.5 py-2 rounded-md shadow-sm transition hover:bg-emerald-50 hover:shadow"
             >
               Entrar no canal
             </a>

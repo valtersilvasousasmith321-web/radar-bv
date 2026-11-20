@@ -7,7 +7,7 @@
  */
 export default function MesaDeRedacao() {
   return (
-    <div className="bg-navy border-b border-slate-800">
+    <div className="bg-gradient-to-r from-navy via-slate-900 to-navy border-b border-slate-800 shadow-inner">
       <div className="max-w-6xl mx-auto px-6 py-2.5 flex flex-wrap items-center gap-6 text-[13px] text-slate-400">
         <span className="font-bold text-slate-50 uppercase text-[11px] tracking-wide whitespace-nowrap">
           Mesa de Redação IA

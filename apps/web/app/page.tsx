@@ -28,9 +28,9 @@ export default async function Home() {
       <MesaDeRedacao />
 
       {urgente && (
-        <div className="bg-urgente">
-          <a href={`/noticia/${urgente.slug}`} className="max-w-6xl mx-auto px-6 py-2.5 flex items-center gap-3">
-            <span className="bg-white text-urgente text-[11px] font-bold px-2 py-0.5 rounded whitespace-nowrap">
+        <div className="bg-gradient-to-r from-urgente to-red-700 shadow-sm">
+          <a href={`/noticia/${urgente.slug}`} className="max-w-6xl mx-auto px-6 py-2.5 flex items-center gap-3 hover:opacity-95 transition-opacity">
+            <span className="bg-white text-urgente text-[11px] font-bold px-2 py-0.5 rounded whitespace-nowrap animate-pulse">
               URGENTE
             </span>
             <span className="text-white font-semibold text-[15px]">{urgente.titulo}</span>
@@ -59,14 +59,14 @@ export default async function Home() {
           <BannerAnuncio banner={bannerLateral1} />
           <ListaMaisLidas noticias={noticias} />
           <BannerAnuncio banner={bannerLateral2} />
-          <div className="bg-esmeralda rounded-xl p-5 text-white">
+          <div className="bg-gradient-to-br from-esmeralda to-emerald-700 rounded-xl p-5 text-white shadow-md">
             <h3 className="text-base font-bold">Receba no WhatsApp</h3>
             <p className="text-[13px] text-emerald-100 mt-1.5 leading-relaxed">
               Resumo das principais notícias direto no seu grupo ou canal, sem precisar abrir o site.
             </p>
             <a
               href="https://wa.me/5595000000000"
-              className="inline-block mt-3 bg-white text-emerald-800 text-[13px] font-bold px-3.5 py-2 rounded-md hover:bg-emerald-50"
+              className="inline-block mt-3 bg-white text-emerald-800 text-[13px] font-bold px-3.5 py-2 rounded-md shadow-sm transition hover:bg-emerald-50 hover:shadow"
             >
               Entrar no canal
             </a>
