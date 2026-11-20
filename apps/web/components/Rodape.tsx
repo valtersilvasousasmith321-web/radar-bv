@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { EXPEDIENTE } from "@/lib/contatos";
 
 export default function Rodape() {
   return (
@@ -20,6 +21,7 @@ export default function Rodape() {
             <Link href="/editoria/roraima" className="hover:underline">Roraima</Link>
             <Link href="/editoria/policia" className="hover:underline">Polícia</Link>
             <Link href="/editoria/politica" className="hover:underline">Política</Link>
+            <Link href="/quem-somos" className="hover:underline">Quem somos</Link>
           </div>
         </div>
         <div className="flex-1 min-w-[160px]">
@@ -40,7 +42,9 @@ export default function Rodape() {
           </div>
         </div>
       </div>
-      <div className="border-t border-slate-800 py-4 text-xs text-center">© 2026 Radar BV — radarbv.com.br</div>
+      <div className="border-t border-slate-800 py-4 text-xs text-center">
+        © 2026 Radar BV — radarbv.com.br — {EXPEDIENTE.razaoSocial} — CNPJ {EXPEDIENTE.cnpj}
+      </div>
     </footer>
   );
 }
