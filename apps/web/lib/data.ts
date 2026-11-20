@@ -28,6 +28,42 @@ export async function getNoticias(opts?: { editoria?: Editoria; limite?: number 
   return lista.slice(0, opts?.limite ?? 30);
 }
 
+/**
+ * Busca notícias publicadas em "páginas", da mais recente pra mais antiga —
+ * é o que alimenta a rolagem infinita das páginas de editoria: a pessoa vai
+ * descendo e o feed vai carregando sozinho dias e dias pra trás, sem limite
+ * (igual os grandes portais de notícia: G1, UOL etc). Como nenhuma notícia
+ * é apagada do banco, o histórico completo sempre está acessível assim,
+ * sem precisar de uma tela de "arquivo" separada.
+ */
+export async function getNoticiasPaginadas(opts: {
+  editoria?: Editoria;
+  offset: number;
+  quantidade: number;
+}): Promise<{ itens: Noticia[]; temMais: boolean }> {
+  if (supabase) {
+    let query = supabase
+      .from("noticias")
+      .select("*")
+      .eq("status", "publicado")
+      .order("data_publicacao", { ascending: false })
+      .range(opts.offset, opts.offset + opts.quantidade); // 1 item a mais, só pra saber se tem próxima página
+
+    if (opts.editoria) query = query.eq("editoria", opts.editoria);
+
+    const { data, error } = await query;
+    if (!error && data) {
+      const temMais = data.length > opts.quantidade;
+      return { itens: data.slice(0, opts.quantidade) as Noticia[], temMais };
+    }
+  }
+
+  let lista = NOTICIAS_DEMO;
+  if (opts.editoria) lista = lista.filter((n) => n.editoria === opts.editoria);
+  const fatia = lista.slice(opts.offset, opts.offset + opts.quantidade);
+  return { itens: fatia, temMais: opts.offset + opts.quantidade < lista.length };
+}
+
 export async function getNoticiaPorSlug(slug: string): Promise<Noticia | null> {
   if (supabase) {
     const { data, error } = await supabase.from("noticias").select("*").eq("slug", slug).eq("status", "publicado").maybeSingle();

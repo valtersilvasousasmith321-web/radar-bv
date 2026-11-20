@@ -3,9 +3,11 @@ import { notFound } from "next/navigation";
 import Cabecalho from "@/components/Cabecalho";
 import Rodape from "@/components/Rodape";
 import BannerAnuncio from "@/components/BannerAnuncio";
-import { CardNoticiaCompacto } from "@/components/CardNoticia";
-import { getBanner, getNoticias } from "@/lib/data";
+import FeedInfinito from "@/components/FeedInfinito";
+import { getBanner, getNoticiasPaginadas } from "@/lib/data";
 import { EDITORIAS, NOME_EDITORIA, type Editoria } from "@/lib/types";
+
+const QUANTIDADE_POR_PAGINA = 12;
 
 export const revalidate = 60;
 
@@ -30,7 +32,11 @@ export default async function PaginaEditoria({ params }: ParametrosRota) {
   if (!ehEditoriaValida(valor)) notFound();
   const editoria = valor;
 
-  const noticias = await getNoticias({ editoria, limite: 18 });
+  const { itens: noticias, temMais } = await getNoticiasPaginadas({
+    editoria,
+    offset: 0,
+    quantidade: QUANTIDADE_POR_PAGINA,
+  });
   const bannerTopo = await getBanner("topo", { editoria });
   const bannerLateral = await getBanner("lateral", { editoria });
 
@@ -52,11 +58,7 @@ export default async function PaginaEditoria({ params }: ParametrosRota) {
           {noticias.length === 0 ? (
             <p className="text-slate-500">Ainda não há notícias publicadas nesta editoria.</p>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-5">
-              {noticias.map((n) => (
-                <CardNoticiaCompacto key={n.id} noticia={n} />
-              ))}
-            </div>
+            <FeedInfinito editoria={editoria} itensIniciais={noticias} temMaisInicial={temMais} />
           )}
         </section>
 
