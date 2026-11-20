@@ -23,15 +23,29 @@ export default async function PaginaFontes({ searchParams }: { searchParams: Pro
           <input name="nome" required className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm" placeholder="Ex: Secretaria de Saúde RR" />
         </div>
         <div className="flex-[2] min-w-[260px]">
-          <label className="block text-xs font-semibold text-slate-600 mb-1">URL (feed RSS ou página)</label>
-          <input name="url_base" required type="url" className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm" placeholder="https://..." />
+          <label id="label-url-base" className="block text-xs font-semibold text-slate-600 mb-1">
+            URL (feed RSS ou página)
+          </label>
+          <input
+            id="input-url-base"
+            name="url_base"
+            required
+            type="url"
+            className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
+            placeholder="https://..."
+          />
+          <p id="ajuda-url-base" className="hidden text-xs text-slate-400 mt-1">
+            Para o tipo &quot;Busca&quot;, não é uma URL — é o TEMA que a IA vai pesquisar na web (ex: &quot;notícias
+            de Boa Vista e Roraima hoje&quot;, &quot;trânsito em Boa Vista&quot;, &quot;polícia em Roraima&quot;).
+          </p>
         </div>
         <div className="min-w-[120px]">
           <label className="block text-xs font-semibold text-slate-600 mb-1">Tipo</label>
-          <select name="tipo" className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm">
+          <select id="select-tipo" name="tipo" className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm">
             <option value="rss">RSS</option>
             <option value="html">HTML</option>
             <option value="api">API</option>
+            <option value="busca">Busca (tema)</option>
           </select>
         </div>
         <div className="min-w-[160px]">
@@ -49,6 +63,40 @@ export default async function PaginaFontes({ searchParams }: { searchParams: Pro
           Adicionar
         </button>
       </form>
+
+      {/* Alterna o campo "URL" entre URL de verdade (rss/html/api) e tema de busca
+          (busca), sem precisar transformar a página num client component. */}
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `
+            (function () {
+              function atualizarCampoUrl() {
+                var select = document.getElementById("select-tipo");
+                var input = document.getElementById("input-url-base");
+                var label = document.getElementById("label-url-base");
+                var ajuda = document.getElementById("ajuda-url-base");
+                if (!select || !input || !label || !ajuda) return;
+                if (select.value === "busca") {
+                  input.type = "text";
+                  input.placeholder = "Ex: notícias de Boa Vista e Roraima hoje";
+                  label.textContent = "Tema a pesquisar";
+                  ajuda.classList.remove("hidden");
+                } else {
+                  input.type = "url";
+                  input.placeholder = "https://...";
+                  label.textContent = "URL (feed RSS ou página)";
+                  ajuda.classList.add("hidden");
+                }
+              }
+              var select = document.getElementById("select-tipo");
+              if (select) {
+                select.addEventListener("change", atualizarCampoUrl);
+                atualizarCampoUrl();
+              }
+            })();
+          `,
+        }}
+      />
 
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
         <table className="w-full text-sm">

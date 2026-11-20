@@ -4,6 +4,7 @@ import Parser from "rss-parser";
 import fetch from "node-fetch";
 import { supabase } from "./db.js";
 import { log } from "./logger.js";
+import { pesquisarNoticias } from "./ai/pesquisador.js";
 import type { FonteMonitorada, ItemBruto } from "./types.js";
 
 // Identifica como navegador comum — muitos sites .gov.br e de imprensa
@@ -182,6 +183,56 @@ function extrairLinksDeArtigos(html: string, urlBase: string): Array<{ url: stri
     .slice(0, 10);
 }
 
+/**
+ * Busca o HTML de UMA URL de artigo específico, com o mesmo User-Agent e
+ * agente TLS permissivo usados no resto do coletor. Retorna null em caso de
+ * falha (isolado — quem chama decide o que fazer, nunca propaga o erro).
+ * Compartilhado entre coletarHtml (links extraídos de página de listagem) e
+ * coletarBusca (links encontrados pelo pesquisador via busca na web).
+ */
+async function buscarConteudoDeUrl(url: string): Promise<string | null> {
+  try {
+    const resposta = await fetch(url, {
+      signal: AbortSignal.timeout(15_000),
+      headers: { "User-Agent": USER_AGENT, Accept: "text/html,application/xhtml+xml" },
+      agent: url.startsWith("https:") ? agenteTlsPermissivo : undefined,
+    });
+    if (!resposta.ok) return null;
+    return await resposta.text();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Extrai itens de uma fonte do tipo "busca" (item 3 do plano de estrutura
+ * grande): em vez de depender de uma única página/URL fixa, pesquisa o TEMA
+ * cadastrado (fonte.url_base) na web de verdade via pesquisador.ts — a mesma
+ * lógica de busca que a IA usa quando alguém pede uma notícia no chat — e
+ * busca o conteúdo completo de cada artigo individual encontrado.
+ */
+async function coletarBusca(fonte: FonteMonitorada): Promise<ItemBruto[]> {
+  const encontrados = await pesquisarNoticias(fonte.url_base, 5);
+  if (encontrados.length === 0) return [];
+
+  const itens = await Promise.all(
+    encontrados.map(async ({ url, tituloCandidato }): Promise<ItemBruto | null> => {
+      const htmlArtigo = await buscarConteudoDeUrl(url);
+      if (!htmlArtigo) return null;
+      return {
+        fonteId: fonte.id,
+        fonteNome: fonte.nome,
+        url,
+        tituloOriginal: tituloCandidato || fonte.nome,
+        conteudoBruto: htmlArtigo,
+        editoriaPadrao: fonte.editoria_padrao,
+      };
+    })
+  );
+
+  return itens.filter((item): item is ItemBruto => item !== null);
+}
+
 /** Extrai itens de uma fonte do tipo HTML simples (scraping leve) */
 async function coletarHtml(fonte: FonteMonitorada): Promise<ItemBruto[]> {
   // node-fetch v3 NÃO suporta mais a opção "timeout" (removida desde a v2) —
@@ -223,25 +274,16 @@ async function coletarHtml(fonte: FonteMonitorada): Promise<ItemBruto[]> {
   // de Fontes, só que agora por item dentro da própria fonte).
   const itens = await Promise.all(
     links.map(async ({ url, tituloCandidato }): Promise<ItemBruto | null> => {
-      try {
-        const respostaArtigo = await fetch(url, {
-          signal: AbortSignal.timeout(15_000),
-          headers: { "User-Agent": USER_AGENT, Accept: "text/html,application/xhtml+xml" },
-          agent: url.startsWith("https:") ? agenteTlsPermissivo : undefined,
-        });
-        if (!respostaArtigo.ok) return null;
-        const htmlArtigo = await respostaArtigo.text();
-        return {
-          fonteId: fonte.id,
-          fonteNome: fonte.nome,
-          url,
-          tituloOriginal: tituloCandidato || fonte.nome,
-          conteudoBruto: htmlArtigo,
-          editoriaPadrao: fonte.editoria_padrao,
-        };
-      } catch {
-        return null; // isolado: uma notícia falhando não derruba as outras da mesma fonte
-      }
+      const htmlArtigo = await buscarConteudoDeUrl(url);
+      if (!htmlArtigo) return null; // isolado: uma notícia falhando não derruba as outras da mesma fonte
+      return {
+        fonteId: fonte.id,
+        fonteNome: fonte.nome,
+        url,
+        tituloOriginal: tituloCandidato || fonte.nome,
+        conteudoBruto: htmlArtigo,
+        editoriaPadrao: fonte.editoria_padrao,
+      };
     })
   );
 
@@ -254,7 +296,12 @@ async function coletarHtml(fonte: FonteMonitorada): Promise<ItemBruto[]> {
  */
 async function coletarDeUmaFonte(fonte: FonteMonitorada): Promise<ItemBruto[]> {
   try {
-    const itens = fonte.tipo === "rss" ? await coletarRss(fonte) : await coletarHtml(fonte);
+    const itens =
+      fonte.tipo === "rss"
+        ? await coletarRss(fonte)
+        : fonte.tipo === "busca"
+          ? await coletarBusca(fonte)
+          : await coletarHtml(fonte);
 
     if (fonte.erros_consecutivos > 0) {
       await supabase.from("fontes_monitoradas").update({ erros_consecutivos: 0, ultimo_erro: null }).eq("id", fonte.id);

@@ -9,12 +9,15 @@ export type Editoria =
 
 export type StatusNoticia = "rascunho" | "agendado" | "publicado" | "erro" | "removido";
 export type OrigemIA = "claude" | "gemini" | "groq" | "manual";
-export type TipoFonte = "rss" | "html" | "api";
+export type TipoFonte = "rss" | "html" | "api" | "busca";
 export type NivelLog = "info" | "warning" | "error" | "critico";
 
 export interface FonteMonitorada {
   id: string;
   nome: string;
+  // Para tipo "rss"/"html"/"api": a URL fixa de onde coletar.
+  // Para tipo "busca": NÃO é uma URL — é o TEMA/assunto a pesquisar na web
+  // (ex: "notícias de Boa Vista e Roraima hoje"), usado pelo pesquisador.ts.
   url_base: string;
   tipo: TipoFonte;
   editoria_padrao: Editoria | null;

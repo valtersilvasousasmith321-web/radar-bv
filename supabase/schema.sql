@@ -22,7 +22,10 @@ do $$ begin
 exception when duplicate_object then null; end $$;
 
 do $$ begin
-  create type tipo_fonte as enum ('rss', 'html', 'api');
+  -- "busca": fonte por TEMA pesquisado na web (via pesquisador.ts), não por
+  -- URL fixa — a mesma estrutura de busca que a IA usa no chat, por trás dos
+  -- panos do coletor de notícias.
+  create type tipo_fonte as enum ('rss', 'html', 'api', 'busca');
 exception when duplicate_object then null; end $$;
 
 do $$ begin

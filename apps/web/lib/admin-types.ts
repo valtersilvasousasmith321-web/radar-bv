@@ -33,7 +33,7 @@ export interface FonteMonitorada {
   id: string;
   nome: string;
   url_base: string;
-  tipo: "rss" | "html" | "api";
+  tipo: "rss" | "html" | "api" | "busca";
   editoria_padrao: Editoria | null;
   ativa: boolean;
   confiabilidade: number;
