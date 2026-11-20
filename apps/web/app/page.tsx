@@ -3,7 +3,7 @@ import MesaDeRedacao from "@/components/MesaDeRedacao";
 import Rodape from "@/components/Rodape";
 import BannerAnuncio from "@/components/BannerAnuncio";
 import { CardNoticiaCompacto, CardNoticiaDestaque, CardNoticiaLinha } from "@/components/CardNoticia";
-import { getBanner, getNoticias } from "@/lib/data";
+import { getBanner, getNoticias, getStatusMesaRedacao } from "@/lib/data";
 
 // Revalida a cada 60s — notícias novas aparecem sem precisar de rebuild manual.
 export const revalidate = 60;
@@ -18,6 +18,7 @@ export default async function Home() {
     : noticias.slice(3, 7);
   const mundo = await getNoticias({ editoria: "brasil_mundo", limite: 4 });
 
+  const statusMesaRedacao = await getStatusMesaRedacao();
   const bannerTopo = await getBanner("topo");
   const bannerLateral1 = await getBanner("lateral", { tags: ["tecnologia", "engenharia"], editoria: "economia" });
   const bannerLateral2 = await getBanner("lateral", { tags: ["documento", "cartorio"], editoria: destaque?.editoria });
@@ -25,7 +26,7 @@ export default async function Home() {
   return (
     <>
       <Cabecalho />
-      <MesaDeRedacao />
+      <MesaDeRedacao status={statusMesaRedacao} />
 
       {urgente && (
         <div className="bg-gradient-to-r from-urgente to-red-700 shadow-sm">

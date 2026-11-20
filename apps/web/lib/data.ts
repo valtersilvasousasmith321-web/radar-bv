@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { supabaseAdmin } from "./supabase-admin";
 import { BANNERS_DEMO, NOTICIAS_DEMO } from "./dados-demo";
 import type { Banner, Editoria, Noticia } from "./types";
 
@@ -56,4 +57,78 @@ export async function getBanner(posicao: Banner["posicao"], contexto?: { tags?: 
     if (!error && data && data.length > 0) return data[0] as Banner;
   }
   return BANNERS_DEMO[posicao] ?? null;
+}
+
+export interface StatusMesaRedacao {
+  /** Rótulo da etapa atual do pulso jornalístico, em português, pronto pra exibir. */
+  etapa: string;
+  /** ISO do instante desse status (último log relevante), pra calcular "há X min" no cliente. */
+  quando: string | null;
+  /** Quantas fontes oficiais estão ativas agora (fontes_monitoradas.ativa = true). */
+  quantidadeFontes: number;
+  /** false quando não há log recente (worker nunca rodou um pulso ou está há mais de 3h parado). */
+  ativo: boolean;
+}
+
+const LIMITE_INATIVIDADE_MS = 3 * 60 * 60 * 1000; // 3h — depois disso, trata como ocioso, não "travado"
+
+/**
+ * Status real da Mesa de Redação, lido do logs_sistema do worker (Supabase,
+ * via service_role — tabela sem policy pública, então só pode ser chamado
+ * de um Server Component). Sem Supabase configurado, ou sem nenhum log
+ * ainda, retorna um estado honesto de "aguardando" em vez de inventar
+ * atividade — a barra existe pra dar transparência real, não decoração.
+ */
+export async function getStatusMesaRedacao(): Promise<StatusMesaRedacao> {
+  if (!supabase) {
+    return { etapa: "Aguardando o worker ser configurado", quando: null, quantidadeFontes: 0, ativo: false };
+  }
+
+  try {
+    const db = supabaseAdmin();
+    const [{ data: ultimoLog }, { count: quantidadeFontes }] = await Promise.all([
+      db
+        .from("logs_sistema")
+        .select("origem, mensagem, criado_em")
+        .order("criado_em", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      db.from("fontes_monitoradas").select("id", { count: "exact", head: true }).eq("ativa", true),
+    ]);
+
+    if (!ultimoLog) {
+      return { etapa: "Aguardando o primeiro pulso do Cron Dinâmico", quando: null, quantidadeFontes: quantidadeFontes ?? 0, ativo: false };
+    }
+
+    const idadeMs = Date.now() - new Date(ultimoLog.criado_em).getTime();
+    if (idadeMs > LIMITE_INATIVIDADE_MS) {
+      return { etapa: "Aguardando o próximo pulso agendado", quando: null, quantidadeFontes: quantidadeFontes ?? 0, ativo: false };
+    }
+
+    const etapa = etapaAPartirDoLog(ultimoLog.origem, ultimoLog.mensagem);
+    return { etapa, quando: ultimoLog.criado_em, quantidadeFontes: quantidadeFontes ?? 0, ativo: true };
+  } catch {
+    return { etapa: "Status indisponível no momento", quando: null, quantidadeFontes: 0, ativo: false };
+  }
+}
+
+function etapaAPartirDoLog(origem: string, mensagem: string): string {
+  if (origem === "scheduler") {
+    if (mensagem.includes("Iniciando pulso")) return "Coletando fontes oficiais";
+    if (mensagem.includes("concluído")) return "Aguardando próximo pulso";
+    return "Monitorando fontes";
+  }
+  if (origem === "collector") return "Coletando fontes oficiais";
+  if (origem === "pipeline") {
+    if (mensagem.includes("redigida com sucesso via claude")) return "Redigindo — Claude";
+    if (mensagem.includes("redigida com sucesso via gemini")) return "Redigindo — Gemini (fallback)";
+    if (mensagem.includes("redigida com sucesso via groq")) return "Redigindo — Groq (fallback)";
+    if (mensagem.includes("já coberto")) return "Triagem — Gemini";
+    return "Triagem — Gemini";
+  }
+  if (origem === "queue") {
+    if (mensagem.includes("publicada")) return "Publicado";
+    if (mensagem.includes("agendada")) return "Na fila de publicação";
+  }
+  return "Monitorando";
 }
