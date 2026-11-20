@@ -5,7 +5,15 @@ import { supabase } from "./db.js";
 import { log } from "./logger.js";
 import type { FonteMonitorada, ItemBruto } from "./types.js";
 
-const rssParser = new Parser({ timeout: 15_000 });
+// Identifica como navegador comum — muitos sites .gov.br e de imprensa
+// bloqueiam (403) requisições sem User-Agent, por padrão de segurança (WAF).
+const USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+
+const rssParser = new Parser({
+  timeout: 15_000,
+  headers: { "User-Agent": USER_AGENT },
+});
 
 /** Gera hash estável a partir da URL (chave da Trava de Silêncio) */
 function gerarHash(url: string): string {
@@ -91,7 +99,10 @@ async function coletarHtml(fonte: FonteMonitorada): Promise<ItemBruto[]> {
   // para sempre e, por estarmos dentro de um Promise.all (ver executarCicloDeColeta),
   // travaria o ciclo de coleta inteiro, quebrando o Isolamento de Fontes.
   // AbortSignal.timeout é a forma correta de aplicar timeout real aqui.
-  const resposta = await fetch(fonte.url_base, { signal: AbortSignal.timeout(15_000) });
+  const resposta = await fetch(fonte.url_base, {
+    signal: AbortSignal.timeout(15_000),
+    headers: { "User-Agent": USER_AGENT, Accept: "text/html,application/xhtml+xml" },
+  });
   if (!resposta.ok) {
     throw new Error(`HTTP ${resposta.status} ao buscar ${fonte.url_base}`);
   }
