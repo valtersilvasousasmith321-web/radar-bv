@@ -6,9 +6,20 @@ import type { Editoria, ItemBruto, MateriaRedigida, ResumoGemini } from "../type
 
 const groq = config.ia.groqApiKey ? new Groq({ apiKey: config.ia.groqApiKey }) : null;
 
+// "llama-3.1-70b-versatile" e "llama-3.3-70b-versatile" foram aposentados pela
+// Groq em 16/08/2026. Seguimos a recomendação oficial da própria Groq
+// (console.groq.com/docs/deprecations) e usamos "openai/gpt-oss-120b".
+const MODELO_FALLBACK = "openai/gpt-oss-120b";
+
 function extrairJson<T>(texto: string): T {
   const limpo = texto.trim().replace(/^```json\s*/i, "").replace(/```$/i, "").trim();
-  return JSON.parse(limpo) as T;
+  try {
+    return JSON.parse(limpo) as T;
+  } catch {
+    const match = limpo.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error(`Resposta vazia ou sem JSON reconhecível: "${limpo.slice(0, 200)}"`);
+    return JSON.parse(match[0]) as T;
+  }
 }
 
 /**
@@ -31,7 +42,7 @@ export async function triarComGroqFallback(item: ItemBruto): Promise<ResumoGemin
     });
 
     const resposta = await groq.chat.completions.create({
-      model: "llama-3.1-70b-versatile",
+      model: MODELO_FALLBACK,
       messages: [{ role: "user", content: prompt }],
       temperature: 0.2,
       max_tokens: 500,
@@ -67,7 +78,7 @@ export async function redigirComGroqFallback(params: {
   try {
     const prompt = promptRedacaoFallback(params);
     const resposta = await groq.chat.completions.create({
-      model: "llama-3.1-70b-versatile",
+      model: MODELO_FALLBACK,
       messages: [{ role: "user", content: prompt }],
       temperature: 0.3,
       max_tokens: 1200,

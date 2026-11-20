@@ -8,7 +8,15 @@ const anthropic = new Anthropic({ apiKey: config.ia.anthropicApiKey });
 
 function extrairJson<T>(texto: string): T {
   const limpo = texto.trim().replace(/^```json\s*/i, "").replace(/```$/i, "").trim();
-  return JSON.parse(limpo) as T;
+  try {
+    return JSON.parse(limpo) as T;
+  } catch {
+    // Claude às vezes devolve texto antes/depois do JSON ("Aqui está:\n{...}")
+    // ou a resposta vem vazia/cortada — tenta extrair só o bloco {...} antes de desistir.
+    const match = limpo.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error(`Resposta vazia ou sem JSON reconhecível: "${limpo.slice(0, 200)}"`);
+    return JSON.parse(match[0]) as T;
+  }
 }
 
 /**
@@ -28,12 +36,14 @@ export async function triarComClaude(item: ItemBruto): Promise<ResumoGemini | nu
 
     const resposta = await anthropic.messages.create({
       model: "claude-haiku-5-5",
-      max_tokens: 500,
+      max_tokens: 800,
       messages: [{ role: "user", content: prompt }],
     });
 
-    const bloco = resposta.content[0];
-    const texto = bloco.type === "text" ? bloco.text : "";
+    // Em prompts mais longos o Haiku às vezes devolve um bloco de "thinking"
+    // (vazio/oculto) ANTES do bloco de texto — nunca assumir que é o [0].
+    const bloco = resposta.content.find((b) => b.type === "text");
+    const texto = bloco && bloco.type === "text" ? bloco.text : "";
     const json = extrairJson<ResumoGemini>(texto);
 
     if (!json.topicos || json.topicos.length === 0) {
@@ -71,8 +81,10 @@ export async function redigirComClaude(params: {
     messages: [{ role: "user", content: prompt }],
   });
 
-  const bloco = resposta.content[0];
-  const texto = bloco.type === "text" ? bloco.text : "";
+  // Mesmo cuidado da triagem: o Haiku pode devolver um bloco de "thinking"
+  // antes do bloco de texto em prompts mais longos como este.
+  const bloco = resposta.content.find((b) => b.type === "text");
+  const texto = bloco && bloco.type === "text" ? bloco.text : "";
   const json = extrairJson<any>(texto);
 
   if (json.insuficiente) {

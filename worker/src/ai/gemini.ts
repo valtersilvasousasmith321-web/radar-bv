@@ -14,7 +14,13 @@ const modeloFlash = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
 function extrairJson<T>(texto: string): T {
   // Remove possíveis blocos de markdown (```json ... ```) que o modelo às vezes devolve
   const limpo = texto.trim().replace(/^```json\s*/i, "").replace(/```$/i, "").trim();
-  return JSON.parse(limpo) as T;
+  try {
+    return JSON.parse(limpo) as T;
+  } catch {
+    const match = limpo.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error(`Resposta vazia ou sem JSON reconhecível: "${limpo.slice(0, 200)}"`);
+    return JSON.parse(match[0]) as T;
+  }
 }
 
 /**
