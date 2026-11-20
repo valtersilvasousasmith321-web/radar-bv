@@ -130,6 +130,58 @@ async function coletarRss(fonte: FonteMonitorada): Promise<ItemBruto[]> {
   }));
 }
 
+/**
+ * Extrai links de notícias individuais de uma página de listagem/categoria
+ * (ex: portal.../categoria/roraima/, que mistura várias manchetes, menu e
+ * barra lateral num só HTML). Sem isso, a página inteira virava "1 item" e
+ * nenhuma IA conseguia separar notícia de lixo de página — o verdadeiro
+ * motivo de tantas fontes caírem em "sujeira de página" na triagem.
+ *
+ * Heurística: mesmo domínio da fonte + último segmento do caminho com cara
+ * de slug de notícia (tem hífen e é razoavelmente longo) — filtra fora
+ * menu, rodapé, redes sociais, tags/categorias e paginação.
+ */
+function extrairLinksDeArtigos(html: string, urlBase: string): Array<{ url: string; tituloCandidato: string }> {
+  const hostBase = new URL(urlBase).hostname;
+  const vistos = new Map<string, string>(); // url -> título candidato
+  const regexAncora = /<a\s+[^>]*href=["']([^"'#]+)["'][^>]*>(.*?)<\/a>/gis;
+
+  let match: RegExpExecArray | null;
+  while ((match = regexAncora.exec(html)) !== null) {
+    const hrefBruto = match[1].trim();
+    if (!hrefBruto || hrefBruto.startsWith("javascript:") || hrefBruto.startsWith("mailto:") || hrefBruto.startsWith("tel:")) {
+      continue;
+    }
+
+    let absoluta: URL;
+    try {
+      absoluta = new URL(hrefBruto, urlBase);
+    } catch {
+      continue;
+    }
+    if (absoluta.hostname !== hostBase) continue; // só notícias do próprio site da fonte
+
+    const segmentos = absoluta.pathname.split("/").filter(Boolean);
+    const ultimoSegmento = segmentos[segmentos.length - 1] ?? "";
+    // Páginas de categoria/tag/página de listagem não têm cara de notícia individual.
+    const pareceListagem = /^(categoria|category|tag|tudo-sobre|page|pagina|busca|search)$/i.test(segmentos[0] ?? "") || /^\d+$/.test(ultimoSegmento);
+    const pareceArtigo = ultimoSegmento.length > 15 && ultimoSegmento.includes("-") && !pareceListagem;
+    if (!pareceArtigo) continue;
+
+    const textoAncora = match[2].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    const urlLimpa = absoluta.toString();
+    const tituloAtual = vistos.get(urlLimpa);
+    // Mantém o maior texto de âncora encontrado pro mesmo link (a 1ª ocorrência costuma ser só uma imagem/ícone)
+    if (!tituloAtual || textoAncora.length > tituloAtual.length) {
+      vistos.set(urlLimpa, textoAncora);
+    }
+  }
+
+  return Array.from(vistos.entries())
+    .map(([url, tituloCandidato]) => ({ url, tituloCandidato }))
+    .slice(0, 10);
+}
+
 /** Extrai itens de uma fonte do tipo HTML simples (scraping leve) */
 async function coletarHtml(fonte: FonteMonitorada): Promise<ItemBruto[]> {
   // node-fetch v3 NÃO suporta mais a opção "timeout" (removida desde a v2) —
@@ -146,19 +198,54 @@ async function coletarHtml(fonte: FonteMonitorada): Promise<ItemBruto[]> {
     throw new Error(`HTTP ${resposta.status} ao buscar ${fonte.url_base}`);
   }
   const html = await resposta.text();
-  // Scraping mínimo genérico: Fase 1 trata a página inteira como 1 "item",
-  // suficiente pro pipeline de IA fazer a triagem. Parsers específicos por
-  // site (ex: Diário Oficial) podem ser plugados aqui em fases futuras.
-  return [
-    {
-      fonteId: fonte.id,
-      fonteNome: fonte.nome,
-      url: fonte.url_base,
-      tituloOriginal: fonte.nome,
-      conteudoBruto: html,
-      editoriaPadrao: fonte.editoria_padrao,
-    },
-  ];
+
+  const links = extrairLinksDeArtigos(html, fonte.url_base);
+
+  if (links.length === 0) {
+    // Nenhum link de notícia individual identificado (ex: a própria fonte já
+    // É uma página de 1 notícia só, tipo um comunicado de imprensa) — mantém
+    // o comportamento antigo de tratar a página inteira como 1 item.
+    return [
+      {
+        fonteId: fonte.id,
+        fonteNome: fonte.nome,
+        url: fonte.url_base,
+        tituloOriginal: fonte.nome,
+        conteudoBruto: html,
+        editoriaPadrao: fonte.editoria_padrao,
+      },
+    ];
+  }
+
+  // Página de listagem/categoria: busca o conteúdo de CADA notícia individual
+  // separadamente, igual já acontece pra fontes RSS — isolado por link, uma
+  // falha numa notícia não derruba as outras (mesmo princípio do Isolamento
+  // de Fontes, só que agora por item dentro da própria fonte).
+  const itens = await Promise.all(
+    links.map(async ({ url, tituloCandidato }): Promise<ItemBruto | null> => {
+      try {
+        const respostaArtigo = await fetch(url, {
+          signal: AbortSignal.timeout(15_000),
+          headers: { "User-Agent": USER_AGENT, Accept: "text/html,application/xhtml+xml" },
+          agent: url.startsWith("https:") ? agenteTlsPermissivo : undefined,
+        });
+        if (!respostaArtigo.ok) return null;
+        const htmlArtigo = await respostaArtigo.text();
+        return {
+          fonteId: fonte.id,
+          fonteNome: fonte.nome,
+          url,
+          tituloOriginal: tituloCandidato || fonte.nome,
+          conteudoBruto: htmlArtigo,
+          editoriaPadrao: fonte.editoria_padrao,
+        };
+      } catch {
+        return null; // isolado: uma notícia falhando não derruba as outras da mesma fonte
+      }
+    })
+  );
+
+  return itens.filter((item): item is ItemBruto => item !== null);
 }
 
 /**
