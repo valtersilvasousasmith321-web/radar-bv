@@ -26,14 +26,9 @@ const agenteTlsPermissivo = new https.Agent({
   servername: "",
 });
 
-const rssParser = new Parser({
-  timeout: 15_000,
-  headers: { "User-Agent": USER_AGENT },
-  // O rss-parser faz a requisição por fora do node-fetch usado em coletarHtml,
-  // então precisa do MESMO agente TLS permissivo, senão fontes RSS de sites
-  // com certificado mal configurado continuam falhando mesmo com a correção.
-  requestOptions: { agent: agenteTlsPermissivo },
-});
+// Usado só para INTERPRETAR o XML (parseString) — quem busca o feed na rede
+// agora é o fetch + agenteTlsPermissivo em coletarRss, não mais o rss-parser.
+const rssParser = new Parser({ timeout: 15_000 });
 
 /** Gera hash estável a partir da URL (chave da Trava de Silêncio) */
 function gerarHash(url: string): string {
@@ -96,9 +91,32 @@ async function buscarFontesAtivas(): Promise<FonteMonitorada[]> {
   return data as FonteMonitorada[];
 }
 
-/** Extrai itens de uma fonte do tipo RSS */
+/**
+ * Extrai itens de uma fonte do tipo RSS.
+ *
+ * Antes, isso usava rssParser.parseURL(), que faz sua PRÓPRIA requisição por
+ * dentro (https.get nativo do Node), repassando o agente TLS via
+ * `requestOptions`. Isso funciona na teoria, mas é um segundo caminho de rede
+ * paralelo ao do coletarHtml — e foi exatamente nesse caminho que as fontes
+ * .gov.br continuaram falhando mesmo depois da correção, então não dá mais
+ * pra confiar nele sem reserva.
+ *
+ * Agora buscamos o XML nós mesmos com o MESMO fetch + agente já comprovado em
+ * coletarHtml, e só então entregamos o texto já baixado para o rssParser
+ * interpretar (parseString, não parseURL). Um único caminho de rede pro
+ * sistema inteiro — mais fácil de confiar e de depurar no futuro.
+ */
 async function coletarRss(fonte: FonteMonitorada): Promise<ItemBruto[]> {
-  const feed = await rssParser.parseURL(fonte.url_base);
+  const resposta = await fetch(fonte.url_base, {
+    signal: AbortSignal.timeout(15_000),
+    headers: { "User-Agent": USER_AGENT, Accept: "application/rss+xml,application/xml,text/xml" },
+    agent: fonte.url_base.startsWith("https:") ? agenteTlsPermissivo : undefined,
+  });
+  if (!resposta.ok) {
+    throw new Error(`HTTP ${resposta.status} ao buscar feed ${fonte.url_base}`);
+  }
+  const xml = await resposta.text();
+  const feed = await rssParser.parseString(xml);
   return (feed.items ?? []).slice(0, 20).map((item) => ({
     fonteId: fonte.id,
     fonteNome: fonte.nome,
