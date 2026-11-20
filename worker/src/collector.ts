@@ -19,11 +19,20 @@ const USER_AGENT =
 const agenteTlsPermissivo = new https.Agent({
   rejectUnauthorized: false,
   minVersion: "TLSv1",
+  // Alguns servidores .gov.br respondem "unrecognized_name" (alerta TLS 112)
+  // porque não reconhecem o nome enviado no SNI (Server Name Indication) —
+  // comum em servidores antigos com um único certificado "pega-tudo".
+  // servername: "" instrui o Node a não enviar SNI algum, contornando isso.
+  servername: "",
 });
 
 const rssParser = new Parser({
   timeout: 15_000,
   headers: { "User-Agent": USER_AGENT },
+  // O rss-parser faz a requisição por fora do node-fetch usado em coletarHtml,
+  // então precisa do MESMO agente TLS permissivo, senão fontes RSS de sites
+  // com certificado mal configurado continuam falhando mesmo com a correção.
+  requestOptions: { agent: agenteTlsPermissivo },
 });
 
 /** Gera hash estável a partir da URL (chave da Trava de Silêncio) */
