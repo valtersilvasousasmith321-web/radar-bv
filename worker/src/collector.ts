@@ -5,6 +5,7 @@ import fetch from "node-fetch";
 import { supabase } from "./db.js";
 import { log } from "./logger.js";
 import { pesquisarNoticias } from "./ai/pesquisador.js";
+import { extrairTextoPrincipal } from "./extrairTexto.js";
 import type { FonteMonitorada, ItemBruto } from "./types.js";
 
 // Identifica como navegador comum — muitos sites .gov.br e de imprensa
@@ -224,7 +225,7 @@ async function coletarBusca(fonte: FonteMonitorada): Promise<ItemBruto[]> {
         fonteNome: fonte.nome,
         url,
         tituloOriginal: tituloCandidato || fonte.nome,
-        conteudoBruto: htmlArtigo,
+        conteudoBruto: extrairTextoPrincipal(htmlArtigo, url),
         editoriaPadrao: fonte.editoria_padrao,
       };
     })
@@ -262,7 +263,7 @@ async function coletarHtml(fonte: FonteMonitorada): Promise<ItemBruto[]> {
         fonteNome: fonte.nome,
         url: fonte.url_base,
         tituloOriginal: fonte.nome,
-        conteudoBruto: html,
+        conteudoBruto: extrairTextoPrincipal(html, fonte.url_base),
         editoriaPadrao: fonte.editoria_padrao,
       },
     ];
@@ -281,7 +282,7 @@ async function coletarHtml(fonte: FonteMonitorada): Promise<ItemBruto[]> {
         fonteNome: fonte.nome,
         url,
         tituloOriginal: tituloCandidato || fonte.nome,
-        conteudoBruto: htmlArtigo,
+        conteudoBruto: extrairTextoPrincipal(htmlArtigo, url),
         editoriaPadrao: fonte.editoria_padrao,
       };
     })
