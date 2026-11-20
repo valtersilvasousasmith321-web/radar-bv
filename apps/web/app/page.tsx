@@ -4,6 +4,7 @@ import Rodape from "@/components/Rodape";
 import BannerAnuncio from "@/components/BannerAnuncio";
 import { CardNoticiaCompacto, CardNoticiaDestaque, CardNoticiaLinha } from "@/components/CardNoticia";
 import { getBanner, getNoticias, getStatusMesaRedacao } from "@/lib/data";
+import { LINK_GRUPO_WHATSAPP } from "@/lib/contatos";
 
 // Revalida a cada 60s — notícias novas aparecem sem precisar de rebuild manual.
 export const revalidate = 60;
@@ -66,7 +67,9 @@ export default async function Home() {
               Resumo das principais notícias direto no seu grupo ou canal, sem precisar abrir o site.
             </p>
             <a
-              href="https://wa.me/5595984308025"
+              href={LINK_GRUPO_WHATSAPP}
+              target="_blank"
+              rel="noopener noreferrer"
               className="inline-block mt-3 bg-white text-emerald-800 text-[13px] font-bold px-3.5 py-2 rounded-md shadow-sm transition hover:bg-emerald-50 hover:shadow"
             >
               Entrar no canal

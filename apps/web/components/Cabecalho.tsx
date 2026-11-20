@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { EDITORIAS } from "@/lib/types";
+import { LINK_GRUPO_WHATSAPP } from "@/lib/contatos";
 
 export default function Cabecalho() {
   return (
@@ -13,7 +14,9 @@ export default function Cabecalho() {
           </div>
           <div className="flex items-center gap-5">
             <a
-              href="https://wa.me/5595984308025"
+              href={LINK_GRUPO_WHATSAPP}
+              target="_blank"
+              rel="noopener noreferrer"
               className="text-emerald-300 font-semibold hover:underline flex items-center gap-1.5"
             >
               Canal no WhatsApp
