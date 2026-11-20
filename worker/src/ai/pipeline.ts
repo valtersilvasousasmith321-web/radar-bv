@@ -1,7 +1,7 @@
 import { log } from "../logger.js";
 import { triarComGemini, redigirComGeminiFallback } from "./gemini.js";
-import { redigirComClaude } from "./claude.js";
-import { redigirComGroqFallback } from "./groq.js";
+import { redigirComClaude, triarComClaude } from "./claude.js";
+import { redigirComGroqFallback, triarComGroqFallback } from "./groq.js";
 import type { ItemBruto, MateriaRedigida } from "../types.js";
 
 export interface ResultadoPipeline {
@@ -17,16 +17,29 @@ export interface ResultadoPipeline {
  * -> Fallback automático (Gemini Flash, depois Groq/Llama) em caso de
  * erro ou limite de cota. Implementa a Regra de Ouro por completo:
  *   1. Trava de Silêncio já foi aplicada antes (collector.ts)
- *   2. Triagem Gemini
- *   3. Redação-Chefe Claude
+ *   2. Triagem com Fallback em cascata (Gemini -> Claude -> Groq/Llama) —
+ *      sem isso, a cota diária do Gemini (free tier) esgotada travava o
+ *      jornal inteiro, já que nenhum item passava da triagem.
+ *   3. Redação-Chefe Claude, também com Fallback em cascata
  *   4. Blindagem anti-alucinação (embutida nos prompts)
- *   5. Fallback de IA em cascata
+ *   5. Fallback de IA em cascata (cobrindo as etapas 2 e 3)
  */
 export async function processarItem(item: ItemBruto): Promise<ResultadoPipeline | null> {
-  // --- 2. Triagem e Resumo Pesado (Gemini, free tier) ---
-  const resumo = await triarComGemini(item);
+  // --- 2. Triagem e Resumo Pesado, com Fallback em cascata ---
+  let resumo = await triarComGemini(item);
+
   if (!resumo) {
-    return null; // sujeira de página, ou assunto já coberto, ou triagem falhou
+    await log("warning", "pipeline", "Gemini falhou/atingiu cota na triagem — acionando fallback Claude", { url: item.url });
+    resumo = await triarComClaude(item);
+  }
+
+  if (!resumo) {
+    await log("warning", "pipeline", "Claude falhou no fallback de triagem — acionando último fallback (Groq)", { url: item.url });
+    resumo = await triarComGroqFallback(item);
+  }
+
+  if (!resumo) {
+    return null; // sujeira de página, ou triagem falhou nos 3 provedores
   }
   if (resumo.assuntoJaCoberto) {
     await log("info", "pipeline", "Assunto já coberto nas últimas 24h — descartado", { url: item.url });
