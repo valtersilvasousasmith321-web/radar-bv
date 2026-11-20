@@ -5,7 +5,11 @@ import { promptTriagemGemini, promptRedacaoFallback } from "./prompts.js";
 import type { Editoria, ItemBruto, MateriaRedigida, ResumoGemini } from "../types.js";
 
 const genAI = new GoogleGenerativeAI(config.ia.geminiApiKey);
-const modeloFlash = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+// "gemini-1.5-flash" foi definitivamente aposentado pela Google em 2026 (erro 404).
+// Usamos o alias oficial "gemini-flash-latest", que a própria Google atualiza
+// automaticamente para a versão estável mais recente da família Flash —
+// evita que o sistema quebre de novo a cada futura aposentadoria de modelo.
+const modeloFlash = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
 
 function extrairJson<T>(texto: string): T {
   // Remove possíveis blocos de markdown (```json ... ```) que o modelo às vezes devolve

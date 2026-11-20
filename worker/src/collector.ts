@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import https from "node:https";
 import Parser from "rss-parser";
 import fetch from "node-fetch";
 import { supabase } from "./db.js";
@@ -9,6 +10,16 @@ import type { FonteMonitorada, ItemBruto } from "./types.js";
 // bloqueiam (403) requisições sem User-Agent, por padrão de segurança (WAF).
 const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+
+// Vários sites .gov.br rodam servidores com TLS mal configurado (certificado
+// autoassinado, handshake antigo incompatível com os padrões atuais do Node).
+// Como aqui só LEMOS conteúdo público (nunca enviamos dado sensível), relaxar
+// a validação do certificado é um risco aceitável para não perder a fonte
+// inteira por causa de uma configuração ruim do lado deles.
+const agenteTlsPermissivo = new https.Agent({
+  rejectUnauthorized: false,
+  minVersion: "TLSv1",
+});
 
 const rssParser = new Parser({
   timeout: 15_000,
@@ -102,6 +113,7 @@ async function coletarHtml(fonte: FonteMonitorada): Promise<ItemBruto[]> {
   const resposta = await fetch(fonte.url_base, {
     signal: AbortSignal.timeout(15_000),
     headers: { "User-Agent": USER_AGENT, Accept: "text/html,application/xhtml+xml" },
+    agent: fonte.url_base.startsWith("https:") ? agenteTlsPermissivo : undefined,
   });
   if (!resposta.ok) {
     throw new Error(`HTTP ${resposta.status} ao buscar ${fonte.url_base}`);
