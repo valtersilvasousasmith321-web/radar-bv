@@ -16,7 +16,7 @@ import { executarResumoDiario } from "./resumoDiario.js";
  */
 let pulsoEmExecucao = false;
 
-async function executarPulsoJornalistico(origem: string): Promise<void> {
+export async function executarPulsoJornalistico(origem: string): Promise<void> {
   if (pulsoEmExecucao) {
     await log("warning", "scheduler", `Pulso (${origem}) ignorado — já há um pulso em execução`);
     return;
