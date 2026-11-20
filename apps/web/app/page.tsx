@@ -2,29 +2,40 @@ import Cabecalho from "@/components/Cabecalho";
 import MesaDeRedacao from "@/components/MesaDeRedacao";
 import Rodape from "@/components/Rodape";
 import BannerAnuncio from "@/components/BannerAnuncio";
-import { CardNoticiaCompacto, CardNoticiaDestaque, CardNoticiaLinha } from "@/components/CardNoticia";
+import { CardNoticiaCompacto, CardNoticiaLinha } from "@/components/CardNoticia";
+import { CarrosselDestaques } from "@/components/CarrosselDestaques";
 import { getBanner, getNoticias, getStatusMesaRedacao } from "@/lib/data";
 import { LINK_GRUPO_WHATSAPP } from "@/lib/contatos";
 
 // Revalida a cada 60s — notícias novas aparecem sem precisar de rebuild manual.
 export const revalidate = 60;
 
+const QUANTIDADE_CARROSSEL = 5;
+
 export default async function Home() {
   const noticias = await getNoticias({ limite: 12 });
   const urgente = noticias.find((n) => n.urgente);
-  // A marcação manual "destaque" é pra dar um empurrão editorial numa
-  // matéria importante — mas sem isso expirar, uma notícia marcada há dias
-  // ficava PRESA na foto grande do topo pra sempre, enquanto o resto do
-  // site (abaixo) continuava atualizando normalmente — dava a falsa
-  // impressão de que "nada atualiza". Passado esse prazo, o destaque volta
-  // a ser simplesmente a notícia mais recente, como em qualquer outra seção.
+  // A marcação manual "destaque" dá um empurrão editorial numa matéria
+  // importante, colocando-a primeiro no carrossel do topo — mas sem prazo
+  // de validade ela ficava PRESA ali pra sempre, enquanto o resto do site
+  // (abaixo) continuava atualizando normalmente, dando a falsa impressão de
+  // que "nada atualiza". Passadas 6h, ela sai da frente e vira só mais uma
+  // manchete entre as mais recentes.
   const HORAS_LIMITE_DESTAQUE_MANUAL = 6;
   const candidataDestaqueManual = noticias.find((n) => n.destaque);
   const destaqueManualAindaValido =
     candidataDestaqueManual?.data_publicacao != null &&
     Date.now() - new Date(candidataDestaqueManual.data_publicacao).getTime() < HORAS_LIMITE_DESTAQUE_MANUAL * 60 * 60 * 1000;
-  const destaque = destaqueManualAindaValido ? candidataDestaqueManual : noticias[0];
-  const secundarias = noticias.filter((n) => n.id !== destaque?.id).slice(0, 3);
+
+  // O topo agora é um carrossel com várias manchetes girando automaticamente
+  // (igual g1/Folha BV), não mais uma foto única fixa — isso elimina de vez
+  // o problema de "uma notícia travada no topo", porque não existe mais um
+  // único slot pra travar.
+  const destaques = destaqueManualAindaValido
+    ? [candidataDestaqueManual!, ...noticias.filter((n) => n.id !== candidataDestaqueManual!.id)].slice(0, QUANTIDADE_CARROSSEL)
+    : noticias.slice(0, QUANTIDADE_CARROSSEL);
+  const destaque = destaques[0];
+  const secundarias = noticias.filter((n) => !destaques.some((d) => d.id === n.id)).slice(0, 3);
   const roraima = (await getNoticias({ editoria: "roraima", limite: 4 })).length
     ? await getNoticias({ editoria: "roraima", limite: 4 })
     : noticias.slice(3, 7);
@@ -54,7 +65,7 @@ export default async function Home() {
       <main className="max-w-6xl mx-auto w-full px-6 py-8 flex flex-wrap gap-8">
         <div className="flex-[999_1_720px] min-w-0 flex flex-col gap-10">
           <section className="grid md:grid-cols-2 gap-6">
-            {destaque && <CardNoticiaDestaque noticia={destaque} />}
+            {destaques.length > 0 && <CarrosselDestaques itens={destaques} />}
             <div className="flex flex-col gap-5">
               {secundarias.map((n) => (
                 <CardNoticiaLinha key={n.id} noticia={n} />

@@ -4,7 +4,7 @@ import type { Noticia } from "@/lib/types";
 import { NOME_EDITORIA, ORIGEM_IA_LABEL } from "@/lib/types";
 import { tempoRelativo } from "@/lib/formato";
 
-const CORES_EDITORIA: Record<string, string> = {
+export const CORES_EDITORIA: Record<string, string> = {
   boa_vista: "text-esmeralda",
   roraima: "text-esmeralda",
   policia: "text-red-700",
@@ -14,7 +14,19 @@ const CORES_EDITORIA: Record<string, string> = {
   brasil_mundo: "text-navy",
 };
 
-function FotoOuPlaceholder({ noticia, altura }: { noticia: Noticia; altura: string }) {
+// Fundo sólido da etiqueta de editoria (usada sobre foto, estilo "tag" dos
+// grandes portais — POLÍCIA, ECONOMIA etc. em destaque na própria imagem).
+export const FUNDO_EDITORIA: Record<string, string> = {
+  boa_vista: "bg-esmeralda",
+  roraima: "bg-esmeralda",
+  policia: "bg-red-700",
+  politica: "bg-navy",
+  economia: "bg-amber-700",
+  esportes: "bg-navy",
+  brasil_mundo: "bg-navy",
+};
+
+export function FotoOuPlaceholder({ noticia, altura }: { noticia: Noticia; altura: string }) {
   // Antes isso só mostrava a foto quando NÃO era fallback — mas o fallback
   // agora é sempre uma imagem institucional real (nunca mais uma URL
   // quebrada), então faz sentido exibi-la também, em vez de cair num
@@ -44,8 +56,13 @@ function FotoOuPlaceholder({ noticia, altura }: { noticia: Noticia; altura: stri
 export function CardNoticiaCompacto({ noticia }: { noticia: Noticia }) {
   return (
     <article className="bg-white border border-slate-200 rounded-[10px] overflow-hidden shadow-sm transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5">
-      <Link href={`/noticia/${noticia.slug}`}>
+      <Link href={`/noticia/${noticia.slug}`} className="relative block">
         <FotoOuPlaceholder noticia={noticia} altura="h-[120px]" />
+        <span
+          className={`absolute top-2 left-2 ${FUNDO_EDITORIA[noticia.editoria]} text-white text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded`}
+        >
+          {NOME_EDITORIA[noticia.editoria]}
+        </span>
       </Link>
       <div className="p-3.5">
         <h3 className="text-sm font-semibold text-navy leading-snug">
