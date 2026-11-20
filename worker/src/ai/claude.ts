@@ -36,9 +36,15 @@ export async function triarComClaude(item: ItemBruto): Promise<ResumoGemini | nu
 
     const resposta = await anthropic.messages.create({
       model: "claude-haiku-5-5",
-      max_tokens: 800,
+      max_tokens: 1500,
+      // O Haiku 5.5 "pensa" (thinking) por padrão em todo pedido, e esse
+      // pensamento consome do MESMO limite de max_tokens da resposta final —
+      // em notícias mais complexas, o pensamento comia o espaço e cortava o
+      // JSON no meio. "effort: low" reduz esse pensamento ao mínimo, e o
+      // max_tokens maior dá uma margem de segurança extra.
+      output_config: { effort: "low" },
       messages: [{ role: "user", content: prompt }],
-    });
+    } as any);
 
     // Em prompts mais longos o Haiku às vezes devolve um bloco de "thinking"
     // (vazio/oculto) ANTES do bloco de texto — nunca assumir que é o [0].
@@ -77,9 +83,12 @@ export async function redigirComClaude(params: {
 
   const resposta = await anthropic.messages.create({
     model: "claude-haiku-5-5",
-    max_tokens: 1200,
+    max_tokens: 2000,
+    // Mesmo motivo da triagem: reduz o "pensamento" interno que disputava
+    // espaço com o texto final da matéria redigida.
+    output_config: { effort: "low" },
     messages: [{ role: "user", content: prompt }],
-  });
+  } as any);
 
   // Mesmo cuidado da triagem: o Haiku pode devolver um bloco de "thinking"
   // antes do bloco de texto em prompts mais longos como este.

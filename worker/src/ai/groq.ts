@@ -45,10 +45,19 @@ export async function triarComGroqFallback(item: ItemBruto): Promise<ResumoGemin
       model: MODELO_FALLBACK,
       messages: [{ role: "user", content: prompt }],
       temperature: 0.2,
-      max_tokens: 500,
-    });
+      max_tokens: 1200,
+      // "openai/gpt-oss-120b" é um modelo de raciocínio: ele gasta tokens
+      // "pensando" (reasoning_content) antes do texto final, e em casos
+      // extremos isso consumia o orçamento todo e devolvia content vazio.
+      // reasoning_effort "low" reduz esse raciocínio ao mínimo necessário.
+      reasoning_effort: "low",
+    } as any);
 
     const texto = resposta.choices[0]?.message?.content ?? "";
+    if (!texto.trim()) {
+      await log("warning", "groq", "Triagem (fallback Groq) devolveu content vazio mesmo com reasoning_effort low", { url: item.url });
+      return null;
+    }
     const json = extrairJson<ResumoGemini>(texto);
 
     if (!json.topicos || json.topicos.length === 0) return null;
@@ -81,10 +90,17 @@ export async function redigirComGroqFallback(params: {
       model: MODELO_FALLBACK,
       messages: [{ role: "user", content: prompt }],
       temperature: 0.3,
-      max_tokens: 1200,
-    });
+      max_tokens: 2000,
+      // Mesmo motivo da triagem: reduz o raciocínio interno do modelo pra
+      // não disputar espaço com o texto final da matéria.
+      reasoning_effort: "low",
+    } as any);
 
     const texto = resposta.choices[0]?.message?.content ?? "";
+    if (!texto.trim()) {
+      await log("critico", "groq", "Último fallback (Groq) devolveu content vazio mesmo com reasoning_effort low", { fonte: params.fonteNome });
+      return null;
+    }
     const json = extrairJson<any>(texto);
     if (json.insuficiente) return null;
     return json as MateriaRedigida;
