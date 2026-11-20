@@ -12,7 +12,18 @@ export const revalidate = 60;
 export default async function Home() {
   const noticias = await getNoticias({ limite: 12 });
   const urgente = noticias.find((n) => n.urgente);
-  const destaque = noticias.find((n) => n.destaque) ?? noticias[0];
+  // A marcação manual "destaque" é pra dar um empurrão editorial numa
+  // matéria importante — mas sem isso expirar, uma notícia marcada há dias
+  // ficava PRESA na foto grande do topo pra sempre, enquanto o resto do
+  // site (abaixo) continuava atualizando normalmente — dava a falsa
+  // impressão de que "nada atualiza". Passado esse prazo, o destaque volta
+  // a ser simplesmente a notícia mais recente, como em qualquer outra seção.
+  const HORAS_LIMITE_DESTAQUE_MANUAL = 6;
+  const candidataDestaqueManual = noticias.find((n) => n.destaque);
+  const destaqueManualAindaValido =
+    candidataDestaqueManual?.data_publicacao != null &&
+    Date.now() - new Date(candidataDestaqueManual.data_publicacao).getTime() < HORAS_LIMITE_DESTAQUE_MANUAL * 60 * 60 * 1000;
+  const destaque = destaqueManualAindaValido ? candidataDestaqueManual : noticias[0];
   const secundarias = noticias.filter((n) => n.id !== destaque?.id).slice(0, 3);
   const roraima = (await getNoticias({ editoria: "roraima", limite: 4 })).length
     ? await getNoticias({ editoria: "roraima", limite: 4 })
