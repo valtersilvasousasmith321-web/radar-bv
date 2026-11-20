@@ -15,7 +15,11 @@ const CORES_EDITORIA: Record<string, string> = {
 };
 
 function FotoOuPlaceholder({ noticia, altura }: { noticia: Noticia; altura: string }) {
-  if (noticia.imagem_url && !noticia.imagem_e_fallback) {
+  // Antes isso só mostrava a foto quando NÃO era fallback — mas o fallback
+  // agora é sempre uma imagem institucional real (nunca mais uma URL
+  // quebrada), então faz sentido exibi-la também, em vez de cair num
+  // ícone genérico sempre que a API de fotos livres não encontra nada.
+  if (noticia.imagem_url) {
     return (
       <div className={`relative ${altura} bg-slate-300`}>
         <Image src={noticia.imagem_url} alt="" fill className="object-cover" />

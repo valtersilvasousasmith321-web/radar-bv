@@ -308,15 +308,18 @@ values
   )
 on conflict do nothing;
 
+-- Imagem institucional real (não uma URL fictícia) usada como fallback de
+-- segurança quando nenhuma API de banco de fotos livre (Unsplash/Pexels/
+-- Pixabay) encontra uma foto para a matéria.
 insert into imagens_fallback (editoria, url, descricao, padrao)
 values
-  ('boa_vista', 'https://images.example.com/fallback/boa-vista-generica.jpg', 'Imagem genérica de Boa Vista', true),
-  ('roraima', 'https://images.example.com/fallback/roraima-generica.jpg', 'Imagem genérica de Roraima', true),
-  ('policia', 'https://images.example.com/fallback/policia-generica.jpg', 'Viatura/policiamento genérico', true),
-  ('politica', 'https://images.example.com/fallback/politica-generica.jpg', 'Prédio institucional genérico', true),
-  ('economia', 'https://images.example.com/fallback/economia-generica.jpg', 'Imagem genérica de economia', true),
-  ('esportes', 'https://images.example.com/fallback/esportes-generica.jpg', 'Imagem genérica de esportes', true),
-  ('brasil_mundo', 'https://images.example.com/fallback/brasil-mundo-generica.jpg', 'Imagem genérica Brasil/Mundo', true)
+  ('boa_vista', 'https://radarbv.com.br/img/fallback/generico.jpg', 'Imagem institucional Radar BV', true),
+  ('roraima', 'https://radarbv.com.br/img/fallback/generico.jpg', 'Imagem institucional Radar BV', true),
+  ('policia', 'https://radarbv.com.br/img/fallback/generico.jpg', 'Imagem institucional Radar BV', true),
+  ('politica', 'https://radarbv.com.br/img/fallback/generico.jpg', 'Imagem institucional Radar BV', true),
+  ('economia', 'https://radarbv.com.br/img/fallback/generico.jpg', 'Imagem institucional Radar BV', true),
+  ('esportes', 'https://radarbv.com.br/img/fallback/generico.jpg', 'Imagem institucional Radar BV', true),
+  ('brasil_mundo', 'https://radarbv.com.br/img/fallback/generico.jpg', 'Imagem institucional Radar BV', true)
 on conflict do nothing;
 
 -- ----------------------------------------------------------------------------

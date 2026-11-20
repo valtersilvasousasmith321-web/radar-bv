@@ -73,7 +73,7 @@ export default async function PaginaNoticia({ params }: ParametrosRota) {
           </div>
 
           <div className="mt-7 bg-slate-300 rounded-xl overflow-hidden">
-            {noticia.imagem_url && !noticia.imagem_e_fallback ? (
+            {noticia.imagem_url ? (
               <div className="relative h-[400px]">
                 <Image src={noticia.imagem_url} alt="" fill className="object-cover" />
               </div>
