@@ -27,14 +27,14 @@ export default function Rodape() {
           <div className="flex flex-col gap-2.5 mt-4 text-[13px]">
             <a href="https://metadocexpress.com.br" className="hover:underline">Metadoc Express</a>
             <a href="https://azimutegeo.com.br" className="hover:underline">AzimuteGeo</a>
-            <a href="https://wa.me/5595000000000?text=Quero%20saber%20sobre%20servi%C3%A7os%20de%20agrimensura" className="hover:underline">Agrimensura e Topografia</a>
+            <a href="https://wa.me/5595984308025?text=Quero%20saber%20sobre%20servi%C3%A7os%20de%20agrimensura" className="hover:underline">Agrimensura e Topografia</a>
           </div>
         </div>
         <div className="flex-1 min-w-[200px]">
           <h3 className="text-xs font-bold text-white uppercase tracking-wide">Publicidade</h3>
           <div className="mt-4 border-[1.5px] border-dashed border-slate-700 rounded-lg p-3.5">
             <p className="text-[13px] text-slate-300">Anuncie sua empresa aqui no Radar BV.</p>
-            <a href="https://wa.me/5595000000000" className="inline-block mt-2 text-[13px] font-bold text-emerald-300">
+            <a href="https://wa.me/5595984308025" className="inline-block mt-2 text-[13px] font-bold text-emerald-300">
               Falar no WhatsApp →
             </a>
           </div>

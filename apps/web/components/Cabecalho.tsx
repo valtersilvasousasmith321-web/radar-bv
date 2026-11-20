@@ -13,7 +13,7 @@ export default function Cabecalho() {
           </div>
           <div className="flex items-center gap-5">
             <a
-              href="https://wa.me/5595000000000"
+              href="https://wa.me/5595984308025"
               className="text-emerald-300 font-semibold hover:underline flex items-center gap-1.5"
             >
               Canal no WhatsApp

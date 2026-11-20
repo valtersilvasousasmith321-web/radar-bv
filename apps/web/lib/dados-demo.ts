@@ -162,7 +162,7 @@ export const BANNERS_DEMO: Record<string, Banner> = {
     posicao: "topo",
     imagem_url: null,
     link_destino: null,
-    link_whatsapp: "https://wa.me/5595000000000?text=Quero%20anunciar%20no%20Radar%20BV",
+    link_whatsapp: "https://wa.me/5595984308025?text=Quero%20anunciar%20no%20Radar%20BV",
   },
   rodape: {
     id: "demo-banner-agrimensura",
@@ -171,6 +171,6 @@ export const BANNERS_DEMO: Record<string, Banner> = {
     posicao: "rodape",
     imagem_url: null,
     link_destino: null,
-    link_whatsapp: "https://wa.me/5595000000000?text=Quero%20saber%20sobre%20servi%C3%A7os%20de%20agrimensura",
+    link_whatsapp: "https://wa.me/5595984308025?text=Quero%20saber%20sobre%20servi%C3%A7os%20de%20agrimensura",
   },
 };

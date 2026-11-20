@@ -130,7 +130,7 @@ export default async function PaginaNoticia({ params }: ParametrosRota) {
               Resumo das principais notícias direto no seu grupo ou canal.
             </p>
             <a
-              href="https://wa.me/5595000000000"
+              href="https://wa.me/5595984308025"
               className="inline-block mt-3 bg-white text-emerald-800 text-[13px] font-bold px-3.5 py-2 rounded-md shadow-sm transition hover:bg-emerald-50 hover:shadow"
             >
               Entrar no canal
