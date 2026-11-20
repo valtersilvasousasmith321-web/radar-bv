@@ -1,4 +1,5 @@
 import { log } from "../logger.js";
+import { triarComOllama } from "./ollama.js";
 import { triarComGemini, redigirComGeminiFallback } from "./gemini.js";
 import { redigirComClaude, triarComClaude } from "./claude.js";
 import { redigirComGroqFallback, triarComGroqFallback } from "./groq.js";
@@ -13,20 +14,31 @@ export interface ResultadoPipeline {
 }
 
 /**
- * Orquestra a esteira completa: Gemini (triagem) -> Claude (redação-chefe)
- * -> Fallback automático (Gemini Flash, depois Groq/Llama) em caso de
- * erro ou limite de cota. Implementa a Regra de Ouro por completo:
+ * Orquestra a esteira completa: IA local (Ollama) -> Gemini -> Claude ->
+ * Groq na triagem, depois Claude (redação-chefe) -> Fallback automático
+ * (Gemini Flash, depois Groq/Llama) em caso de erro ou limite de cota.
+ * Implementa a Regra de Ouro por completo:
  *   1. Trava de Silêncio já foi aplicada antes (collector.ts)
- *   2. Triagem com Fallback em cascata (Gemini -> Claude -> Groq/Llama) —
- *      sem isso, a cota diária do Gemini (free tier) esgotada travava o
- *      jornal inteiro, já que nenhum item passava da triagem.
+ *   2. Triagem com Fallback em cascata (IA local -> Gemini -> Claude ->
+ *      Groq/Llama) — a IA local roda no próprio computador, sem cota nem
+ *      custo, e faz o "serviço pesado" da triagem na maioria dos casos;
+ *      as APIs de nuvem (com teto diário gratuito baixo) só entram quando
+ *      a IA local não está disponível ou não resolveu o item.
  *   3. Redação-Chefe Claude, também com Fallback em cascata
  *   4. Blindagem anti-alucinação (embutida nos prompts)
  *   5. Fallback de IA em cascata (cobrindo as etapas 2 e 3)
  */
 export async function processarItem(item: ItemBruto): Promise<ResultadoPipeline | null> {
   // --- 2. Triagem e Resumo Pesado, com Fallback em cascata ---
-  let resumo = await triarComGemini(item);
+  // A IA local (Ollama) vai na frente: sem cota/custo, poupa o teto diário
+  // gratuito do Gemini e do Groq pros casos em que ela não está disponível.
+  let resumo = await triarComOllama(item);
+
+  if (resumo) {
+    await log("info", "pipeline", "Triagem resolvida pela IA local (Ollama) — sem gastar cota de nuvem", { url: item.url });
+  } else {
+    resumo = await triarComGemini(item);
+  }
 
   if (!resumo) {
     await log("warning", "pipeline", "Gemini falhou/atingiu cota na triagem — acionando fallback Claude", { url: item.url });

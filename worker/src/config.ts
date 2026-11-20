@@ -23,6 +23,12 @@ export const config = {
     geminiApiKey: obrigatoria("GEMINI_API_KEY"),
     anthropicApiKey: obrigatoria("ANTHROPIC_API_KEY"),
     groqApiKey: process.env.GROQ_API_KEY ?? "",
+    // IA própria/local via Ollama (serviço pesado da triagem, sem cota/custo
+    // nenhum — roda no próprio computador). Totalmente opcional: se o Ollama
+    // não estiver instalado/rodando, o sistema cai sozinho pra cascata de
+    // nuvem (Gemini -> Claude -> Groq), sem quebrar nada.
+    ollamaUrl: process.env.OLLAMA_URL ?? "http://127.0.0.1:11434",
+    ollamaModel: process.env.OLLAMA_MODEL ?? "llama3.2:3b",
   },
   imagens: {
     unsplashAccessKey: process.env.UNSPLASH_ACCESS_KEY ?? "",
