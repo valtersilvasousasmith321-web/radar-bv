@@ -5,7 +5,8 @@ export type Editoria =
   | "politica"
   | "economia"
   | "esportes"
-  | "brasil_mundo";
+  | "brasil_mundo"
+  | "servico_cidadao";
 
 export type OrigemIA = "claude" | "gemini" | "groq" | "openrouter" | "manual";
 
@@ -51,6 +52,7 @@ export const EDITORIAS: { slug: Editoria; label: string }[] = [
   { slug: "economia", label: "Economia" },
   { slug: "esportes", label: "Esportes" },
   { slug: "brasil_mundo", label: "Brasil & Mundo" },
+  { slug: "servico_cidadao", label: "Serviço ao Cidadão" },
 ];
 
 export const NOME_EDITORIA: Record<Editoria, string> = {
@@ -61,6 +63,7 @@ export const NOME_EDITORIA: Record<Editoria, string> = {
   economia: "Economia",
   esportes: "Esportes",
   brasil_mundo: "Brasil & Mundo",
+  servico_cidadao: "Serviço ao Cidadão",
 };
 
 export const ORIGEM_IA_LABEL: Record<OrigemIA, string> = {

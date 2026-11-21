@@ -13,6 +13,7 @@ export const EDITORIAS_VALIDAS = [
   "economia",
   "esportes",
   "brasil_mundo",
+  "servico_cidadao",
 ] as const;
 
 /**
@@ -66,7 +67,7 @@ REGRAS INVIOLÁVEIS:
   "assuntoJaCoberto": boolean,
   "topicos": ["string", "..."],
   "palavraChaveImagem": "string",
-  "editoriaSugerida": "boa_vista|roraima|policia|politica|economia|esportes|brasil_mundo"
+  "editoriaSugerida": "${EDITORIAS_VALIDAS.join("|")}"
 }
 
 TÍTULO ORIGINAL: ${params.tituloOriginal}
@@ -95,7 +96,7 @@ REGRAS INVIOLÁVEIS (blindagem anti-fake news / anti-alucinação):
   "titulo": "string (máx. 90 caracteres, sem clickbait)",
   "subtitulo": "string (máx. 160 caracteres)",
   "conteudo": "string (5 a 8 parágrafos em texto corrido, parágrafos separados por \\n\\n — desenvolva TODOS os tópicos apurados com profundidade, incluindo contexto e antecedentes quando houver; nunca encha linguiça repetindo a mesma informação com outras palavras só pra alongar)",
-  "editoria": "boa_vista|roraima|policia|politica|economia|esportes|brasil_mundo",
+  "editoria": "${EDITORIAS_VALIDAS.join("|")}",
   "tags": ["string", "..."],
   "urgente": boolean
 }
@@ -147,7 +148,7 @@ Se suficiente:
   "titulo": "string (máx. 90 caracteres, sem clickbait)",
   "subtitulo": "string (máx. 160 caracteres)",
   "conteudo": "string (2 a 4 parágrafos, parágrafos separados por \\n\\n, deixando claro que é relato de morador)",
-  "editoria": "boa_vista|roraima|policia|politica|economia|esportes|brasil_mundo",
+  "editoria": "${EDITORIAS_VALIDAS.join("|")}",
   "tags": ["string", "..."],
   "urgente": false
 }`;

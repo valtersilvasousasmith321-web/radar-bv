@@ -5,7 +5,8 @@ export type Editoria =
   | "politica"
   | "economia"
   | "esportes"
-  | "brasil_mundo";
+  | "brasil_mundo"
+  | "servico_cidadao";
 
 export type StatusNoticia = "rascunho" | "agendado" | "publicado" | "erro" | "removido";
 export type OrigemIA = "claude" | "gemini" | "groq" | "manual";

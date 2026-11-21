@@ -14,7 +14,11 @@ do $$ begin
 exception when duplicate_object then null; end $$;
 
 do $$ begin
-  create type editoria as enum ('boa_vista', 'roraima', 'policia', 'politica', 'economia', 'esportes', 'brasil_mundo');
+  -- "servico_cidadao" (item 5 — Serviço ao Cidadão: SINE, editais, matrícula)
+  -- foi adicionado depois via "alter type ... add value" (ver
+  -- supabase/migracao-servico-cidadao-PARTE1.sql) — mantido aqui pra quem
+  -- recriar o banco do zero já nascer com o valor certo.
+  create type editoria as enum ('boa_vista', 'roraima', 'policia', 'politica', 'economia', 'esportes', 'brasil_mundo', 'servico_cidadao');
 exception when duplicate_object then null; end $$;
 
 do $$ begin
@@ -368,7 +372,8 @@ values
   ('politica', 'https://radarbv.com.br/img/fallback/generico.jpg', 'Imagem institucional Radar BV', true),
   ('economia', 'https://radarbv.com.br/img/fallback/generico.jpg', 'Imagem institucional Radar BV', true),
   ('esportes', 'https://radarbv.com.br/img/fallback/generico.jpg', 'Imagem institucional Radar BV', true),
-  ('brasil_mundo', 'https://radarbv.com.br/img/fallback/generico.jpg', 'Imagem institucional Radar BV', true)
+  ('brasil_mundo', 'https://radarbv.com.br/img/fallback/generico.jpg', 'Imagem institucional Radar BV', true),
+  ('servico_cidadao', 'https://radarbv.com.br/img/fallback/generico.jpg', 'Imagem institucional Radar BV', true)
 on conflict do nothing;
 
 -- ----------------------------------------------------------------------------

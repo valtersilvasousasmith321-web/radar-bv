@@ -40,6 +40,7 @@ export default async function Home() {
     ? await getNoticias({ editoria: "roraima", limite: 4 })
     : noticias.slice(3, 7);
   const mundo = await getNoticias({ editoria: "brasil_mundo", limite: 4 });
+  const servicoCidadao = await getNoticias({ editoria: "servico_cidadao", limite: 4 });
 
   const statusMesaRedacao = await getStatusMesaRedacao();
   const bannerTopo = await getBanner("topo");
@@ -76,6 +77,12 @@ export default async function Home() {
           {bannerTopo && <BannerAnuncio banner={bannerTopo} variante="faixa" />}
 
           <SecaoEditoria titulo="Roraima" href="/editoria/roraima" corBorda="border-esmeralda" itens={roraima} />
+          <SecaoEditoria
+            titulo="Serviço ao Cidadão"
+            href="/editoria/servico_cidadao"
+            corBorda="border-amber-500"
+            itens={servicoCidadao}
+          />
           <SecaoEditoria titulo="Brasil & Mundo" href="/editoria/brasil_mundo" corBorda="border-navy" itens={mundo} />
         </div>
 
