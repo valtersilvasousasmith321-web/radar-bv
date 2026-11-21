@@ -26,13 +26,16 @@ export default function Cabecalho() {
       </div>
 
       <header className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-slate-200 shadow-sm">
-        <div className="max-w-6xl mx-auto px-6 py-5 flex flex-wrap items-center justify-between gap-5">
+        <div className="max-w-6xl mx-auto px-6 py-4 md:py-5 flex flex-col md:flex-row md:items-center md:justify-between gap-2 md:gap-5">
           <Link href="/" aria-label="Radar BV — página inicial" className="flex items-baseline">
             <span className="font-display text-3xl font-bold text-navy tracking-tight">RADAR</span>
             <span className="font-display text-3xl font-bold text-urgente">BV</span>
           </Link>
-          <nav aria-label="Editorias" className="flex flex-wrap gap-7 text-[15px] font-semibold text-navy">
-            <Link href="/" className="relative py-1 transition-colors hover:text-urgente">
+          <nav
+            aria-label="Editorias"
+            className="flex items-center gap-5 md:flex-wrap md:gap-7 overflow-x-auto md:overflow-visible whitespace-nowrap -mx-6 px-6 md:mx-0 md:px-0 text-[13px] md:text-[15px] font-semibold text-navy [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+          >
+            <Link href="/" className="relative py-1 shrink-0 transition-colors hover:text-urgente">
               Início
             </Link>
             {EDITORIAS.map((e) => (
@@ -40,7 +43,7 @@ export default function Cabecalho() {
                 key={e.slug}
                 href={`/editoria/${e.slug}`}
                 className={
-                  "relative py-1 transition-colors " +
+                  "relative py-1 shrink-0 transition-colors " +
                   (e.slug === "roraima" ? "text-esmeralda hover:text-urgente" : "hover:text-urgente")
                 }
               >
