@@ -14,13 +14,13 @@ export default function BannerAnuncio({ banner, variante = "caixa" }: { banner: 
   if (variante === "faixa") {
     return (
       <div className="bg-white border-[1.5px] border-dashed border-slate-300 rounded-xl px-6 py-5 flex flex-wrap items-center justify-between gap-4 shadow-sm transition-shadow hover:shadow-md">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 min-w-0">
           {banner.imagem_url && (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={banner.imagem_url}
               alt={banner.nome_anunciante}
-              className="h-12 w-auto max-w-[140px] object-contain rounded-md"
+              className="w-40 sm:w-56 aspect-[97/25] object-cover rounded-md shrink-0"
             />
           )}
           <div>
@@ -44,7 +44,7 @@ export default function BannerAnuncio({ banner, variante = "caixa" }: { banner: 
           <img
             src={banner.imagem_url}
             alt={banner.nome_anunciante}
-            className="w-full h-28 object-cover"
+            className="w-full aspect-[97/25] object-cover"
           />
         )}
         <div className="p-5">
