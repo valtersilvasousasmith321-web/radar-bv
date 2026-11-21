@@ -12,48 +12,43 @@ export default function BannerAnuncio({ banner, variante = "caixa" }: { banner: 
   const href = banner.link_whatsapp ?? banner.link_destino ?? "#";
 
   if (variante === "faixa") {
+    // Banner horizontal (970x250 / 1940x500 — proporção 97:25): a imagem já
+    // traz nome, texto e call-to-action prontos, então o cartão só rotula
+    // "Publicidade" e mostra a peça inteira, grande o suficiente pra ler.
     return (
-      <div className="bg-white border-[1.5px] border-dashed border-slate-300 rounded-xl px-6 py-5 flex flex-wrap items-center justify-between gap-4 shadow-sm transition-shadow hover:shadow-md">
-        <div className="flex items-center gap-4 min-w-0">
-          {banner.imagem_url && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={banner.imagem_url}
-              alt={banner.nome_anunciante}
-              className="w-40 sm:w-56 aspect-[97/25] object-cover rounded-md shrink-0"
-            />
-          )}
-          <div>
-            <span className="text-[11px] text-slate-400 uppercase tracking-wide">Publicidade</span>
-            <h3 className="text-[17px] font-bold text-navy mt-1">{banner.nome_anunciante}</h3>
-          </div>
-        </div>
-        <a href={href} className="bg-gradient-to-r from-esmeralda to-emerald-600 text-white font-semibold text-sm px-5 py-2.5 rounded-lg whitespace-nowrap shadow-sm transition hover:shadow-md hover:brightness-110">
-          {banner.tipo_anunciante === "captacao_anunciante" ? "Fale com o comercial" : "Saiba mais"}
-        </a>
-      </div>
-    );
-  }
-
-  return (
-    <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
-      <span className="text-[11px] text-slate-400 uppercase tracking-wide">Publicidade — rede Radar BV</span>
-      <div className="mt-3 bg-gradient-to-br from-navy to-slate-900 rounded-[10px] overflow-hidden text-white shadow-md">
+      <a
+        href={href}
+        className="block bg-white border-[1.5px] border-dashed border-slate-300 rounded-xl p-3 shadow-sm transition-shadow hover:shadow-md"
+      >
+        <span className="block text-[11px] text-slate-400 uppercase tracking-wide mb-2 px-1">Publicidade</span>
         {banner.imagem_url && (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={banner.imagem_url}
             alt={banner.nome_anunciante}
-            className="w-full aspect-[97/25] object-cover"
+            className="w-full aspect-[97/25] object-cover rounded-lg"
           />
         )}
-        <div className="p-5">
-          <h3 className="text-base font-bold">{banner.nome_anunciante}</h3>
-          <a href={href} className="inline-block mt-3 bg-leitura text-navy text-[13px] font-semibold px-3.5 py-2 rounded-md hover:bg-white">
-            Saiba mais
-          </a>
-        </div>
-      </div>
-    </div>
+      </a>
+    );
+  }
+
+  // Banner vertical de lateral (800x1000 — proporção 4:5): peça própria pra
+  // essa caixa estreita, sem precisar cortar nem espremer uma arte larga.
+  return (
+    <a
+      href={href}
+      className="block bg-white border border-slate-200 rounded-xl p-3 shadow-sm transition-shadow hover:shadow-md"
+    >
+      <span className="block text-[11px] text-slate-400 uppercase tracking-wide mb-2 px-1">Publicidade — rede Radar BV</span>
+      {banner.imagem_url && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={banner.imagem_url}
+          alt={banner.nome_anunciante}
+          className="w-full aspect-[4/5] object-cover rounded-lg"
+        />
+      )}
+    </a>
   );
 }
