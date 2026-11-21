@@ -1,5 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+
+/**
+ * Compara os tokens por hash (sempre 32 bytes) em vez de string direta —
+ * uma comparação "===" normal vaza, por diferença de tempo de resposta,
+ * quantos caracteres do token batem, o que em teoria ajuda um atacante a
+ * descobrir o token certo aos poucos (timing attack). Segurança da
+ * plataforma (item 14 do plano).
+ */
+function tokensIguais(a: string, b: string): boolean {
+  const hashA = createHash("sha256").update(a).digest();
+  const hashB = createHash("sha256").update(b).digest();
+  return timingSafeEqual(hashA, hashB);
+}
 
 /**
  * Webhook de ENTRADA de dicas/denúncias de moradores via WhatsApp (item 3
@@ -37,7 +51,7 @@ export async function POST(request: NextRequest) {
 
   const auth = request.headers.get("authorization") ?? "";
   const tokenRecebido = auth.replace(/^Bearer\s+/i, "").trim();
-  if (tokenRecebido !== tokenEsperado) {
+  if (!tokensIguais(tokenRecebido, tokenEsperado)) {
     return NextResponse.json({ erro: "não autorizado" }, { status: 401 });
   }
 
