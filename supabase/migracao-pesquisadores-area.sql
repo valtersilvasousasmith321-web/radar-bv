@@ -23,7 +23,7 @@
 -- A) Varredura na web por bairro/zona/interior — fontes tipo "busca"
 -- ----------------------------------------------------------------------------
 insert into fontes_monitoradas (nome, url_base, tipo, editoria_padrao, confiabilidade)
-select v.nome, v.tema, 'busca', v.editoria, 6
+select v.nome, v.tema, 'busca', v.editoria::editoria, 6
 from (
   values
     (
