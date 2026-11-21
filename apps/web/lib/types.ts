@@ -6,7 +6,10 @@ export type Editoria =
   | "economia"
   | "esportes"
   | "brasil_mundo"
-  | "servico_cidadao";
+  | "servico_cidadao"
+  | "saude"
+  | "educacao"
+  | "cultura";
 
 export type OrigemIA = "claude" | "gemini" | "groq" | "openrouter" | "manual";
 
@@ -52,6 +55,9 @@ export const EDITORIAS: { slug: Editoria; label: string }[] = [
   { slug: "economia", label: "Economia" },
   { slug: "esportes", label: "Esportes" },
   { slug: "brasil_mundo", label: "Brasil & Mundo" },
+  { slug: "saude", label: "Saúde" },
+  { slug: "educacao", label: "Educação" },
+  { slug: "cultura", label: "Cultura" },
   { slug: "servico_cidadao", label: "Serviço ao Cidadão" },
 ];
 
@@ -63,6 +69,9 @@ export const NOME_EDITORIA: Record<Editoria, string> = {
   economia: "Economia",
   esportes: "Esportes",
   brasil_mundo: "Brasil & Mundo",
+  saude: "Saúde",
+  educacao: "Educação",
+  cultura: "Cultura",
   servico_cidadao: "Serviço ao Cidadão",
 };
 

@@ -15,10 +15,12 @@ exception when duplicate_object then null; end $$;
 
 do $$ begin
   -- "servico_cidadao" (item 5 — Serviço ao Cidadão: SINE, editais, matrícula)
-  -- foi adicionado depois via "alter type ... add value" (ver
-  -- supabase/migracao-servico-cidadao-PARTE1.sql) — mantido aqui pra quem
-  -- recriar o banco do zero já nascer com o valor certo.
-  create type editoria as enum ('boa_vista', 'roraima', 'policia', 'politica', 'economia', 'esportes', 'brasil_mundo', 'servico_cidadao');
+  -- e "saude", "educacao", "cultura" (item 17 — Editorias temáticas) foram
+  -- adicionados depois via "alter type ... add value" (ver
+  -- supabase/migracao-servico-cidadao-PARTE1.sql e
+  -- supabase/migracao-editorias-tematicas.sql) — mantidos aqui pra quem
+  -- recriar o banco do zero já nascer com os valores certos.
+  create type editoria as enum ('boa_vista', 'roraima', 'policia', 'politica', 'economia', 'esportes', 'brasil_mundo', 'servico_cidadao', 'saude', 'educacao', 'cultura');
 exception when duplicate_object then null; end $$;
 
 do $$ begin
@@ -367,7 +369,10 @@ values
   ('Busca: Política', 'política em Roraima e Boa Vista', 'busca', 'politica'),
   ('Busca: Economia', 'economia em Roraima e Boa Vista', 'busca', 'economia'),
   ('Busca: Esportes', 'esportes em Roraima e Boa Vista', 'busca', 'esportes'),
-  ('Busca: Brasil e Mundo', 'principais notícias do Brasil e do mundo hoje', 'busca', 'brasil_mundo')
+  ('Busca: Brasil e Mundo', 'principais notícias do Brasil e do mundo hoje', 'busca', 'brasil_mundo'),
+  ('Busca: Saúde', 'saúde em Roraima e Boa Vista', 'busca', 'saude'),
+  ('Busca: Educação', 'educação em Roraima e Boa Vista', 'busca', 'educacao'),
+  ('Busca: Cultura', 'cultura em Roraima e Boa Vista', 'busca', 'cultura')
 on conflict do nothing;
 
 -- Rede própria (interno_ecossistema) + banner de captação comercial

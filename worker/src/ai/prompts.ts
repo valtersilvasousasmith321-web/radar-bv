@@ -14,6 +14,9 @@ export const EDITORIAS_VALIDAS = [
   "esportes",
   "brasil_mundo",
   "servico_cidadao",
+  "saude",
+  "educacao",
+  "cultura",
 ] as const;
 
 /**
