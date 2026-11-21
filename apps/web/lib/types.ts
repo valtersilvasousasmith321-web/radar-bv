@@ -13,6 +13,23 @@ export type Editoria =
 
 export type OrigemIA = "claude" | "gemini" | "groq" | "openrouter" | "manual";
 
+export type TipoInfografico = "barra" | "linha" | "linha_do_tempo";
+
+export interface EventoLinhaDoTempo {
+  data: string;
+  titulo: string;
+}
+
+export interface InfograficoDados {
+  tipo: TipoInfografico;
+  titulo: string;
+  categorias?: string[];
+  valores?: number[];
+  unidade?: string;
+  eventos?: EventoLinhaDoTempo[];
+  fonteDados: string;
+}
+
 export interface Noticia {
   id: string;
   titulo: string;
@@ -24,6 +41,7 @@ export interface Noticia {
   imagem_url: string | null;
   imagem_credito: string | null;
   imagem_e_fallback: boolean;
+  infografico: InfograficoDados | null;
   fonte_url_original: string;
   fonte_credito: string | null;
   origem_ia: OrigemIA;

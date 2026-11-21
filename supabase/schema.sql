@@ -106,6 +106,7 @@ create table if not exists noticias (
   imagem_url          text,
   imagem_credito      text,                        -- crédito Unsplash/Pexels ou "fallback"
   imagem_e_fallback   boolean not null default false,
+  infografico         jsonb,                       -- item 18: gráfico/linha do tempo gerado pelo Infografista (null = sem infográfico)
   fonte_id            uuid references fontes_monitoradas(id) on delete set null,
   fonte_url_original  text not null,
   fonte_credito       text,                        -- nome exibido da fonte original

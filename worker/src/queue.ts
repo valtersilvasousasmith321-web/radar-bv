@@ -6,6 +6,7 @@ import { obterImagemParaMateria } from "./images.js";
 import { gerarResumoWhatsApp, enviarParaWhatsApp } from "./whatsapp.js";
 import { revisarCamada1, revisarCamada2 } from "./ai/revisor.js";
 import { verificarFatos } from "./ai/verificadorFatos.js";
+import { avaliarInfografico } from "./ai/infografista.js";
 import { verificarDuplicacaoReal } from "./ai/editorChefe.js";
 import { tentarAdquirirTrava, liberarTrava } from "./vigia.js";
 import { notificarNovaNoticia } from "./pushNotificacoes.js";
@@ -112,6 +113,12 @@ export async function agendarPublicacao(resultado: ResultadoPipeline, fonteId: s
 
   const aprovadoParaPublicar = revisao.aprovado && verificacao.aprovado;
 
+  // Infografista (item 18) — só gera infográfico quando a matéria realmente
+  // tem dado numérico comparável ou sequência de eventos datados; a maioria
+  // das matérias não tem, e `infografico` fica null nesse caso (não bloqueia
+  // nem atrasa a publicação).
+  const infografico = await avaliarInfografico(materia, resultado.topicosApurados);
+
   const slug = gerarSlug(materia.titulo);
   // Editor-chefe/Organizador (item 11) — priorização: matéria urgente não
   // espera atrás das comuns na fila do gotejamento, publica quase na hora.
@@ -131,6 +138,7 @@ export async function agendarPublicacao(resultado: ResultadoPipeline, fonteId: s
       imagem_url: imagem.url,
       imagem_credito: imagem.credito,
       imagem_e_fallback: imagem.eFallback,
+      infografico,
       fonte_id: fonteId,
       fonte_url_original: resultado.fonteUrl,
       fonte_credito: resultado.fonteNome,

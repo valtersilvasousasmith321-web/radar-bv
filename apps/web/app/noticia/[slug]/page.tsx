@@ -8,6 +8,7 @@ import BannerAnuncio from "@/components/BannerAnuncio";
 import BotaoCompartilhar from "@/components/BotaoCompartilhar";
 import { CardNoticiaCompacto } from "@/components/CardNoticia";
 import RegistrarVisualizacao from "@/components/RegistrarVisualizacao";
+import Infografico from "@/components/Infografico";
 import { getBanner, getNoticiaPorSlug, getNoticiasRelacionadas } from "@/lib/data";
 import { LINK_GRUPO_WHATSAPP } from "@/lib/contatos";
 import { NOME_EDITORIA, ORIGEM_IA_LABEL } from "@/lib/types";
@@ -90,6 +91,8 @@ export default async function PaginaNoticia({ params }: ParametrosRota) {
             )}
           </div>
           <p className="text-xs text-slate-400 mt-2">{noticia.imagem_credito}</p>
+
+          {noticia.infografico && <Infografico dados={noticia.infografico} />}
 
           <div className="mt-7">
             {paragrafos.map((p, i) => (
