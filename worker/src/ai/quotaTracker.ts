@@ -21,6 +21,8 @@ export type Provedor = "ollama" | "gemini" | "claude" | "groq" | "openrouter" | 
 interface Estado {
   indisponivelAte: number;
   motivo: string;
+  cooldownAtualMs: number;
+  ultimaFalhaEm: number;
 }
 
 const estado = new Map<Provedor, Estado>();
@@ -31,6 +33,13 @@ const estado = new Map<Provedor, Estado>();
 // o dia inteiro se o erro foi só um pico passageiro (rate limit) e não a
 // cota diária de fato.
 const COOLDOWN_PADRAO_MS = 20 * 60 * 1000; // 20 minutos
+
+// Gerência/RH geral (item 12) — redistribuição de carga adaptativa: se um
+// provedor volta do cooldown e falha de novo quase na hora (sinal de que a
+// cota diária ainda não resetou de verdade, não foi só um pico passageiro),
+// dobra o tempo de espera da próxima vez, até um teto — em vez de ficar
+// batendo nele a cada 20min o dia inteiro à toa.
+const COOLDOWN_MAXIMO_MS = 2 * 60 * 60 * 1000; // 2 horas
 
 const PADROES_ERRO_DE_COTA = [
   /quota/i,
@@ -57,12 +66,32 @@ export function estaDisponivel(provedor: Provedor): boolean {
 export async function marcarIndisponivel(
   provedor: Provedor,
   motivo: string,
-  cooldownMs: number = COOLDOWN_PADRAO_MS
+  cooldownMsBase: number = COOLDOWN_PADRAO_MS
 ): Promise<void> {
-  const jaEstava = estado.has(provedor) && !estaDisponivel(provedor);
-  estado.set(provedor, { indisponivelAte: Date.now() + cooldownMs, motivo });
+  const agora = Date.now();
+  const anterior = estado.get(provedor);
+  const jaEstava = !!anterior && !estaDisponivel(provedor);
+
+  // Se a última falha foi há pouco tempo (menos de 1.5x o cooldown anterior),
+  // é sinal de que voltou e falhou de novo rapidinho — escalona. Senão,
+  // passou tempo suficiente sem erro, volta pro cooldown base.
+  const falhouDeNovoRapido = !!anterior && agora - anterior.ultimaFalhaEm < anterior.cooldownAtualMs * 1.5;
+  const cooldownMs = falhouDeNovoRapido
+    ? Math.min(anterior.cooldownAtualMs * 2, COOLDOWN_MAXIMO_MS)
+    : cooldownMsBase;
+
+  estado.set(provedor, {
+    indisponivelAte: agora + cooldownMs,
+    motivo,
+    cooldownAtualMs: cooldownMs,
+    ultimaFalhaEm: agora,
+  });
+
   if (!jaEstava) {
-    await log("info", "quota", `${provedor} sem fôlego — pulando ele por ${Math.round(cooldownMs / 60000)}min`, { motivo });
+    await log("info", "quota", `${provedor} sem fôlego — pulando ele por ${Math.round(cooldownMs / 60000)}min`, {
+      motivo,
+      escalonado: falhouDeNovoRapido,
+    });
   }
 }
 

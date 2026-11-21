@@ -5,6 +5,7 @@ import { processarItem } from "./ai/pipeline.js";
 import { agendarPublicacao, publicarNoticiasAgendadas } from "./queue.js";
 import { executarResumoDiario } from "./resumoDiario.js";
 import { processarDicasPendentes } from "./dicas.js";
+import { supervisionarEquipe } from "./ai/gerencia.js";
 
 /**
  * Trava de execução única (mutex em memória). Evita que dois pulsos
@@ -133,6 +134,13 @@ export function iniciarCronDinamico(): void {
   // Gotejamento — dica de morador não é "ao vivo" como uma matéria agendada,
   // e sempre vai pra revisão humana antes de qualquer publicação.
   cron.schedule("*/15 * * * *", () => processarDicasPendentes(), { timezone: TZ });
+
+  // Gerência/RH geral (item 12 — supervisão da equipe de IA): de hora em
+  // hora, confere se a bancada inteira de IA parou de resolver itens ou se
+  // algum provedor está com cooldown escalado (cota diária provavelmente
+  // esgotada) — só loga quando há algo a reportar, pra manter o sistema
+  // autossuficiente sem precisar de ninguém vigiando 24h.
+  cron.schedule("20 * * * *", () => supervisionarEquipe(), { timezone: TZ });
 
   log("info", "scheduler", "Cron Dinâmico iniciado com sucesso", {
     timezone: TZ,
