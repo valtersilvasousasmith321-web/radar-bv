@@ -108,11 +108,13 @@ function normalizar(texto: string): string {
  * nunca vai mostrar a rua, o prédio ou a viatura de verdade de Boa Vista.
  */
 async function buscarImagemBancoProprio(textoParaCasar: string, editoria: Editoria): Promise<ResultadoImagem | null> {
-  const { data, error } = await supabase
-    .from("imagens_fallback")
-    .select("url, descricao, tags")
-    .eq("editoria", editoria)
-    .eq("padrao", false);
+  // Busca em TODO o banco próprio, não só na editoria da matéria: uma
+  // matéria sobre prisão/drogas pode sair classificada como "roraima" em
+  // vez de "policia", mas o conteúdo de verdade é policial — e a foto da
+  // viatura (cadastrada na categoria "policia") tem que valer pra ela
+  // também. O que decide se a foto serve é o tema de verdade (tag batendo
+  // no título/subtítulo/tags da matéria), não o rótulo de editoria.
+  const { data, error } = await supabase.from("imagens_fallback").select("url, descricao, tags, editoria").eq("padrao", false);
 
   if (error || !data || data.length === 0) return null;
 
@@ -122,14 +124,23 @@ async function buscarImagemBancoProprio(textoParaCasar: string, editoria: Editor
     return tags.some((tag) => termoBusca.includes(normalizar(tag)));
   });
 
-  // Na editoria "policia" as fotos cadastradas (delegacia, viatura) servem
-  // pra qualquer ocorrência policial, mesmo sem bater palavra por palavra
-  // na tag — então, sem match direto, usa qualquer uma da editoria.
-  const pool = candidatos.length > 0 ? candidatos : editoria === "policia" ? data : [];
-  if (pool.length === 0) return null;
+  // Acharam foto(s) cujo tema bate de verdade com a matéria — nesse caso,
+  // prioriza as que também são da mesma editoria (mais prováveis de ser o
+  // contexto certo), mas aceita qualquer uma que bateu a tag.
+  if (candidatos.length > 0) {
+    const daMesmaEditoria = candidatos.filter((img) => img.editoria === editoria);
+    const pool = daMesmaEditoria.length > 0 ? daMesmaEditoria : candidatos;
+    const escolhida = pool[Math.floor(Math.random() * pool.length)];
+    return { url: escolhida.url, credito: "Foto: Radar BV", eFallback: false };
+  }
 
-  // Entre as que servem, sorteia uma, pra não repetir sempre a mesma foto
-  const escolhida = pool[Math.floor(Math.random() * pool.length)];
+  // Nenhuma tag bateu: como última tentativa antes de ir pro banco de
+  // imagens livres, usa qualquer foto da própria editoria da matéria
+  // (continua sendo mais fiel que uma foto internacional aleatória).
+  const daEditoria = data.filter((img) => img.editoria === editoria);
+  if (daEditoria.length === 0) return null;
+
+  const escolhida = daEditoria[Math.floor(Math.random() * daEditoria.length)];
   return { url: escolhida.url, credito: "Foto: Radar BV", eFallback: false };
 }
 
