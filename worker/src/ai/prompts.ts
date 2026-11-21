@@ -54,7 +54,10 @@ export const TAGS_CRUZAMENTO_ANUNCIOS = [
 
 /** Gemini Flash — Triagem e Resumo Pesado (item 2) */
 export function promptTriagemGemini(params: { tituloOriginal: string; conteudoBruto: string; editoriaPadrao: string | null }): string {
+  const hoje = new Date().toLocaleDateString("pt-BR", { timeZone: "America/Boa_Vista", day: "2-digit", month: "2-digit", year: "numeric" });
   return `Você é um assistente de TRIAGEM jornalística. Sua função é limpar e resumir texto bruto — NUNCA redigir a matéria final.
+
+A DATA DE HOJE É: ${hoje}. Use essa data (e não qualquer outra suposição sua) pra julgar se um evento/prazo mencionado no texto já passou.
 
 REGRAS INVIOLÁVEIS:
 1. Use APENAS fatos literalmente presentes no texto bruto abaixo. NUNCA invente, deduza ou complete nomes, datas, números, cargos ou declarações que não estejam explícitos no texto.
@@ -62,9 +65,11 @@ REGRAS INVIOLÁVEIS:
 3. Extraia de 8 a 12 tópicos objetivos (máximo 400 palavras no total) — não resuma demais: pegue o quê, quem, quando, onde, por quê, E TAMBÉM números, contexto, antecedentes, consequências e qualquer citação/declaração entre aspas que estiver literalmente no texto. O objetivo é dar material suficiente pra uma matéria completa, não um resumo raso — mas segue valendo que é só o que estiver no texto, nunca invente ou complete.
 4. Sugira uma editoria dentre exatamente: ${EDITORIAS_VALIDAS.join(", ")}. Se a fonte já tem editoria padrão ("${params.editoriaPadrao ?? "nenhuma"}"), use-a a menos que o conteúdo claramente pertença a outra.
 5. Sugira uma palavra-chave de busca de imagem EM INGLÊS, com 2 a 4 palavras, bem descritiva e concreta (ex.: "dry river drought", "government office meeting", "indigenous land forest"), pensada para buscar em bancos de imagens internacionais (Unsplash/Pixabay/Pexels). NUNCA use uma palavra portuguesa isolada nem um termo ambíguo que possa ser confundido com nome de lugar (ex.: "rio" sozinho retorna fotos da cidade do Rio de Janeiro em vez de um rio comum — descreva a cena em inglês, como "river" ou "riverbank", em vez disso).
-6. Responda SOMENTE com um JSON válido, sem comentários, sem markdown, no formato exato:
+6. CONTEÚDO DESATUALIZADO: se o texto menciona uma data, período ou prazo específico (feira, evento, inscrição, campanha, "nos dias X a Y", "até o dia X") e, comparando com a DATA DE HOJE acima, esse período JÁ TERMINOU — mas o texto trata isso como algo futuro/atual ("vai ter", "acontece em breve", "inscrições abertas até") — marque "conteudoDesatualizado": true e retorne "topicos": []. Isso é diferente de notícia histórica/retrospectiva (que fala do passado como passado, essa pode virar matéria normalmente) — o problema é SÓ quando o texto apresenta como futuro algo que já passou.
+7. Responda SOMENTE com um JSON válido, sem comentários, sem markdown, no formato exato:
 {
   "assuntoJaCoberto": boolean,
+  "conteudoDesatualizado": boolean,
   "topicos": ["string", "..."],
   "palavraChaveImagem": "string",
   "editoriaSugerida": "${EDITORIAS_VALIDAS.join("|")}"

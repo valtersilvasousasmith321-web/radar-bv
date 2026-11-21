@@ -41,6 +41,7 @@ export interface ItemBruto {
 /** Saída da Triagem do Gemini — fatos essenciais mastigados, sem redação final */
 export interface ResumoGemini {
   assuntoJaCoberto: boolean; // dedup semântico nas últimas 24h
+  conteudoDesatualizado: boolean; // evento/prazo com data específica já encerrada, tratado como futuro/atual no texto-fonte
   topicos: string[]; // 4 a 5 tópicos curtos, fatos objetivos
   palavraChaveImagem: string; // para busca no banco de imagens
   editoriaSugerida: Editoria;

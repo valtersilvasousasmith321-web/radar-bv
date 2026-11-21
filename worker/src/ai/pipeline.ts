@@ -70,6 +70,17 @@ export async function processarItem(item: ItemBruto): Promise<ResultadoPipeline 
     await log("info", "pipeline", "Assunto já coberto nas últimas 24h — descartado", { url: item.url });
     return null;
   }
+  if (resumo.conteudoDesatualizado) {
+    // Flagrado pela auditoria de 21/11/2026: conteúdo (geralmente de fonte
+    // tipo "busca") descrevendo um evento/prazo já encerrado como se fosse
+    // futuro/atual (ex: "Expoferr vai ter..." publicado 2 semanas depois do
+    // evento já ter terminado). A triagem agora compara contra a data real
+    // de hoje — ver regra 6 do promptTriagemGemini.
+    await log("info", "pipeline", "Conteúdo descreve evento/prazo já encerrado como futuro/atual — descartado por estar desatualizado", {
+      url: item.url,
+    });
+    return null;
+  }
 
   const paramsRedacao = {
     topicos: resumo.topicos,
