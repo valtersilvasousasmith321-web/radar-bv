@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import InscricaoNotificacoes from "@/components/InscricaoNotificacoes";
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://radarbv.com.br"),
@@ -35,6 +36,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="pt-BR">
       <body className="font-sans text-slate-700 antialiased flex flex-col min-h-screen">
         {children}
+        <InscricaoNotificacoes />
         <script
           dangerouslySetInnerHTML={{
             __html: `

@@ -328,6 +328,23 @@ end;
 $$;
 
 -- ----------------------------------------------------------------------------
+-- Item 16 — Algoritmo de Personalização + Notificações: inscrições de push
+-- dos leitores (sem cadastro/login, por navegador). Ver
+-- migracao-push-notificacoes.sql pro contexto completo.
+-- ----------------------------------------------------------------------------
+create table if not exists push_subscriptions (
+  id                   uuid primary key default gen_random_uuid(),
+  endpoint             text not null unique,
+  chave_p256dh         text not null,
+  chave_auth           text not null,
+  editorias_interesse  editoria[] not null default '{}', -- vazio = todas
+  ativo                boolean not null default true,
+  criado_em            timestamptz not null default now()
+);
+
+create index if not exists idx_push_subscriptions_ativo on push_subscriptions (ativo) where ativo = true;
+
+-- ----------------------------------------------------------------------------
 -- Seed inicial: fontes de exemplo e imagens de fallback padrão
 -- ----------------------------------------------------------------------------
 insert into fontes_monitoradas (nome, url_base, tipo, editoria_padrao)
@@ -413,6 +430,7 @@ alter table logs_sistema enable row level security;
 alter table destinos_whatsapp enable row level security;
 alter table resumos_diarios_enviados enable row level security;
 alter table dicas_bairro enable row level security;
+alter table push_subscriptions enable row level security;
 
 drop policy if exists "noticias_leitura_publica" on noticias;
 create policy "noticias_leitura_publica" on noticias

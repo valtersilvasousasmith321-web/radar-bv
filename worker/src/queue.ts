@@ -8,6 +8,7 @@ import { revisarCamada1, revisarCamada2 } from "./ai/revisor.js";
 import { verificarFatos } from "./ai/verificadorFatos.js";
 import { verificarDuplicacaoReal } from "./ai/editorChefe.js";
 import { tentarAdquirirTrava, liberarTrava } from "./vigia.js";
+import { notificarNovaNoticia } from "./pushNotificacoes.js";
 import type { ResultadoPipeline } from "./ai/pipeline.js";
 
 function gerarSlug(titulo: string): string {
@@ -175,7 +176,7 @@ export async function publicarNoticiasAgendadas(): Promise<void> {
     const agora = new Date().toISOString();
     const { data: pendentes, error } = await supabase
       .from("noticias")
-      .select("id, resumo_whatsapp")
+      .select("id, resumo_whatsapp, titulo, subtitulo, slug, editoria")
       .eq("status", "agendado")
       .lte("data_publicacao", agora);
 
@@ -194,6 +195,9 @@ export async function publicarNoticiasAgendadas(): Promise<void> {
       if (noticia.resumo_whatsapp) {
         await enviarParaWhatsApp(noticia.resumo_whatsapp);
       }
+      // Algoritmo de Personalização + Notificações (item 16): notifica só
+      // quem ativou push e escolheu acompanhar essa editoria (ou "todas").
+      await notificarNovaNoticia(noticia);
     }
   } finally {
     liberarTrava(NOME_TRAVA);

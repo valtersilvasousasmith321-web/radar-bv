@@ -3,7 +3,7 @@
 // nunca queremos mostrar conteúdo velho por engano), cache-first para
 // estáticos (ícones, manifest) que raramente mudam.
 
-const VERSAO_CACHE = "radar-bv-v1";
+const VERSAO_CACHE = "radar-bv-v2";
 const ESTATICOS = ["/manifest.json", "/icons/icon-192.png", "/icons/icon-512.png"];
 
 self.addEventListener("install", (event) => {
@@ -50,5 +50,41 @@ self.addEventListener("fetch", (event) => {
         return resposta;
       })
       .catch(() => caches.match(request))
+  );
+});
+
+// Item 16 — Algoritmo de Personalização + Notificações: recebe o push
+// enviado pelo worker (ver worker/src/pushNotificacoes.ts) e mostra a
+// notificação nativa do sistema operacional/navegador.
+self.addEventListener("push", (event) => {
+  let dados = { titulo: "Radar BV", corpo: "Nova notícia", url: "/" };
+  try {
+    if (event.data) dados = { ...dados, ...event.data.json() };
+  } catch {
+    // payload sem JSON válido — usa os valores padrão acima
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(dados.titulo, {
+      body: dados.corpo,
+      icon: "/icons/icon-192.png",
+      badge: "/icons/icon-192.png",
+      data: { url: dados.url },
+    })
+  );
+});
+
+// Clique na notificação: abre (ou foca, se já tiver aberta) a notícia.
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = event.notification.data?.url || "/";
+
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientes) => {
+      for (const cliente of clientes) {
+        if (cliente.url === url && "focus" in cliente) return cliente.focus();
+      }
+      return self.clients.openWindow(url);
+    })
   );
 });

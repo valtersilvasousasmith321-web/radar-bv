@@ -50,6 +50,17 @@ export const config = {
     baseUrl: process.env.SITE_BASE_URL ?? "https://www.radarbv.com.br",
   },
 
+  // Algoritmo de Personalização + Notificações (item 16) — Web Push.
+  // Chave pública igual à configurada em NEXT_PUBLIC_VAPID_PUBLIC_KEY no
+  // Vercel (apps/web) — a privada NUNCA vai pro Vercel/navegador, só fica
+  // aqui no worker. Opcional: sem as duas chaves, o envio de notificação
+  // simplesmente não roda (nunca derruba a publicação da notícia).
+  pushNotificacoes: {
+    vapidPublicKey: process.env.VAPID_PUBLIC_KEY ?? "",
+    vapidPrivateKey: process.env.VAPID_PRIVATE_KEY ?? "",
+    vapidContatoEmail: process.env.VAPID_CONTATO_EMAIL ?? "contato@radarbv.com.br",
+  },
+
   /**
    * Janelas do Cron Dinâmico (Regra de Ouro — item 1):
    * - a cada 45 min entre 07h00 e 18h30
