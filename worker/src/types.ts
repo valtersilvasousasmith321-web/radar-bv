@@ -81,3 +81,24 @@ export interface NoticiaParaResumo {
   editoria: Editoria;
   urgente: boolean;
 }
+
+export type StatusDica = "pendente" | "processada" | "descartada";
+
+/** Dica/denúncia de morador recebida via webhook de WhatsApp (item 3 — Pesquisadores por área) */
+export interface DicaBairro {
+  id: string;
+  telefone_remetente: string | null;
+  nome_remetente: string | null;
+  mensagem_texto: string;
+  midia_url: string | null;
+  status: StatusDica;
+  motivo_descarte: string | null;
+  noticia_id: string | null;
+  criado_em: string;
+  processado_em: string | null;
+}
+
+/** Saída da IA ao tentar redigir uma matéria a partir de uma dica de morador */
+export type ResultadoDicaIA =
+  | { suficiente: true; materia: MateriaRedigida }
+  | { suficiente: false; motivo: string };

@@ -76,3 +76,18 @@ export interface DestinoWhatsApp {
   resumo_diario: boolean;
   criado_em: string;
 }
+
+export type StatusDica = "pendente" | "processada" | "descartada";
+
+export interface Dica {
+  id: string;
+  telefone_remetente: string | null;
+  nome_remetente: string | null;
+  mensagem_texto: string;
+  midia_url: string | null;
+  status: StatusDica;
+  motivo_descarte: string | null;
+  noticia_id: string | null;
+  criado_em: string;
+  processado_em: string | null;
+}

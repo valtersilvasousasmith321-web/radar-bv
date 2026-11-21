@@ -4,6 +4,7 @@ import { executarCicloDeColeta } from "./collector.js";
 import { processarItem } from "./ai/pipeline.js";
 import { agendarPublicacao, publicarNoticiasAgendadas } from "./queue.js";
 import { executarResumoDiario } from "./resumoDiario.js";
+import { processarDicasPendentes } from "./dicas.js";
 
 /**
  * Trava de execução única (mutex em memória). Evita que dois pulsos
@@ -114,6 +115,13 @@ export function iniciarCronDinamico(): void {
   // marcados como `resumo_diario = true`. Dedupe por dia fica a cargo do
   // Supabase (constraint unique), então mesmo com restart não duplica.
   cron.schedule("0 8 * * *", () => executarResumoDiario(), { timezone: TZ });
+
+  // Pesquisadores por área, frente B (item 3 — Denúncias/dicas via WhatsApp):
+  // a cada 15 minutos, tenta transformar dicas pendentes de moradores em
+  // rascunho de notícia. Não precisa ser tão frequente quanto a Fila de
+  // Gotejamento — dica de morador não é "ao vivo" como uma matéria agendada,
+  // e sempre vai pra revisão humana antes de qualquer publicação.
+  cron.schedule("*/15 * * * *", () => processarDicasPendentes(), { timezone: TZ });
 
   log("info", "scheduler", "Cron Dinâmico iniciado com sucesso", {
     timezone: TZ,

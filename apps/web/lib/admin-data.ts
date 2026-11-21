@@ -1,6 +1,6 @@
 import "server-only";
 import { supabaseAdmin } from "./supabase-admin";
-import type { Banner, DestinoWhatsApp, FonteMonitorada, Noticia, StatusNoticia } from "./admin-types";
+import type { Banner, Dica, DestinoWhatsApp, FonteMonitorada, Noticia, StatusNoticia } from "./admin-types";
 
 export async function obterResumoDashboard() {
   const db = supabaseAdmin();
@@ -58,4 +58,11 @@ export async function listarDestinosWhatsApp(): Promise<DestinoWhatsApp[]> {
   const { data, error } = await db.from("destinos_whatsapp").select("*").order("criado_em", { ascending: false });
   if (error) throw new Error(`Falha ao listar destinos de WhatsApp: ${error.message}`);
   return (data ?? []) as DestinoWhatsApp[];
+}
+
+export async function listarDicas(): Promise<Dica[]> {
+  const db = supabaseAdmin();
+  const { data, error } = await db.from("dicas_bairro").select("*").order("criado_em", { ascending: false }).limit(100);
+  if (error) throw new Error(`Falha ao listar dicas de moradores: ${error.message}`);
+  return (data ?? []) as Dica[];
 }

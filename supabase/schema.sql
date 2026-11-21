@@ -44,6 +44,14 @@ do $$ begin
   create type tipo_destino_whatsapp as enum ('grupo', 'canal');
 exception when duplicate_object then null; end $$;
 
+do $$ begin
+  -- Dicas/denúncias de moradores via WhatsApp (item 3 do plano —
+  -- Pesquisadores por área). "pendente" até o worker tentar redigir a
+  -- partir dela; "processada" quando virou notícia (rascunho); "descartada"
+  -- quando faltou informação suficiente ou não teve valor jornalístico.
+  create type status_dica as enum ('pendente', 'processada', 'descartada');
+exception when duplicate_object then null; end $$;
+
 -- ----------------------------------------------------------------------------
 -- fontes_monitoradas: de onde o coletor busca notícias + Trava de Silêncio
 -- ----------------------------------------------------------------------------
@@ -256,6 +264,30 @@ create table if not exists destinos_whatsapp (
 
 create index if not exists idx_destinos_whatsapp_ativo on destinos_whatsapp (ativo);
 
+-- ----------------------------------------------------------------------------
+-- dicas_bairro: Pesquisadores por área (item 3) — frente B, denúncias/dicas
+-- de moradores recebidas via webhook de WhatsApp (ainda a ser cadastrado no
+-- provedor). O worker tenta redigir uma matéria a partir de cada dica
+-- pendente; o resultado SEMPRE cai como notícia em status 'rascunho' —
+-- nunca publica direto — porque é relato de cidadão sem qualquer verificação
+-- prévia e pode envolver acusação contra alguém (risco de difamação).
+-- ----------------------------------------------------------------------------
+create table if not exists dicas_bairro (
+  id                  uuid primary key default gen_random_uuid(),
+  telefone_remetente  text,                         -- nunca exibido publicamente, só uso interno
+  nome_remetente      text,
+  mensagem_texto      text not null,
+  midia_url           text,                         -- foto/áudio enviado pelo morador, se houver
+  status              status_dica not null default 'pendente',
+  motivo_descarte     text,
+  noticia_id          uuid references noticias(id) on delete set null,
+  criado_em           timestamptz not null default now(),
+  processado_em       timestamptz
+);
+
+create index if not exists idx_dicas_status on dicas_bairro (status);
+create index if not exists idx_dicas_criado_em on dicas_bairro (criado_em desc);
+
 -- Dedup do resumo diário — garante 1 envio por destino por dia mesmo se o
 -- worker reiniciar ou o cron disparar 2x por engano.
 create table if not exists resumos_diarios_enviados (
@@ -350,6 +382,7 @@ alter table urls_processadas enable row level security;
 alter table logs_sistema enable row level security;
 alter table destinos_whatsapp enable row level security;
 alter table resumos_diarios_enviados enable row level security;
+alter table dicas_bairro enable row level security;
 
 drop policy if exists "noticias_leitura_publica" on noticias;
 create policy "noticias_leitura_publica" on noticias
@@ -365,3 +398,14 @@ create policy "banners_leitura_publica" on banners_publicidade
 -- destinos_whatsapp e resumos_diarios_enviados seguem a mesma regra: sem policy
 -- de leitura pública — só o worker (coleta/disparo) e o painel admin (Fase 3,
 -- também com service_role, nunca exposta ao navegador) têm acesso.
+-- dicas_bairro segue a mesma regra: sem policy de leitura pública — só o
+-- worker (processamento) e o painel admin (revisão/transparência) acessam.
+
+-- ----------------------------------------------------------------------------
+-- Pesquisadores por área (item 3) — varredura na web por bairro/zona/interior.
+-- Reaproveita 100% o tipo de fonte "busca" já existente (pesquisador.ts) —
+-- sem tabela nova, sem código novo no worker, só mais fontes cadastradas.
+-- Ver supabase/migracao-pesquisadores-area.sql para o insert idempotente
+-- (roda separado porque usa "where not exists" em vez de "on conflict",
+-- já que nome não é unique nesta tabela).
+-- ----------------------------------------------------------------------------
