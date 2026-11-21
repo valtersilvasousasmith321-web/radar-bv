@@ -104,7 +104,11 @@ export default async function PaginaNoticia({ params }: ParametrosRota) {
           <div className="mt-8 pt-6 border-t border-slate-200 flex items-center gap-3">
             <span className="text-sm font-semibold text-slate-500">Compartilhar:</span>
             <a
-              href={`https://wa.me/?text=${encodeURIComponent(noticia.titulo)}`}
+              href={`https://wa.me/?text=${encodeURIComponent(
+                `${noticia.titulo}\n\nhttps://www.radarbv.com.br/noticia/${noticia.slug}`
+              )}`}
+              target="_blank"
+              rel="noopener noreferrer"
               className="bg-esmeralda text-white font-semibold text-[13px] px-4 py-2 rounded-full"
             >
               WhatsApp
