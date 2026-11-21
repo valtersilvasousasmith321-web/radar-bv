@@ -5,6 +5,7 @@ import { marcarComoProcessada } from "./collector.js";
 import { obterImagemParaMateria } from "./images.js";
 import { gerarResumoWhatsApp, enviarParaWhatsApp } from "./whatsapp.js";
 import { revisarCamada1, revisarCamada2 } from "./ai/revisor.js";
+import { verificarFatos } from "./ai/verificadorFatos.js";
 import type { ResultadoPipeline } from "./ai/pipeline.js";
 
 function gerarSlug(titulo: string): string {
@@ -70,6 +71,20 @@ export async function agendarPublicacao(resultado: ResultadoPipeline, fonteId: s
     });
   }
 
+  // Verificador de Fatos (item 10) — combate a fake news/desinformação:
+  // checa se a matéria redigida não inventou nenhum fato que não estava
+  // nos tópicos apurados na triagem. Roda independente do Revisor; se
+  // QUALQUER um dos dois reprovar, a matéria vai como rascunho.
+  const verificacao = await verificarFatos(materia, resultado.topicosApurados, resultado.fonteNome);
+  if (!verificacao.aprovado) {
+    await log("warning", "verificadorFatos", "Verificador de Fatos reprovou a matéria — enviando como rascunho pra revisão humana", {
+      titulo: materia.titulo,
+      motivo: verificacao.motivo,
+    });
+  }
+
+  const aprovadoParaPublicar = revisao.aprovado && verificacao.aprovado;
+
   const slug = gerarSlug(materia.titulo);
   const dataPublicacao = calcularProximoSlot();
   const resumoWhatsApp = gerarResumoWhatsApp(materia, slug);
@@ -91,9 +106,9 @@ export async function agendarPublicacao(resultado: ResultadoPipeline, fonteId: s
       fonte_url_original: resultado.fonteUrl,
       fonte_credito: resultado.fonteNome,
       origem_ia: origemIA,
-      status: revisao.aprovado ? "agendado" : "rascunho",
+      status: aprovadoParaPublicar ? "agendado" : "rascunho",
       urgente: materia.urgente,
-      data_publicacao: revisao.aprovado ? dataPublicacao.toISOString() : null,
+      data_publicacao: aprovadoParaPublicar ? dataPublicacao.toISOString() : null,
     })
     .select("id")
     .single();
@@ -107,9 +122,9 @@ export async function agendarPublicacao(resultado: ResultadoPipeline, fonteId: s
   await log(
     "info",
     "queue",
-    revisao.aprovado
+    aprovadoParaPublicar
       ? `Notícia agendada para ${dataPublicacao.toISOString()}`
-      : "Notícia salva como rascunho (reprovada pelo Revisor) — aguardando revisão humana",
+      : "Notícia salva como rascunho (reprovada pelo Revisor ou pelo Verificador de Fatos) — aguardando revisão humana",
     { noticiaId: data.id, titulo: materia.titulo },
   );
 }

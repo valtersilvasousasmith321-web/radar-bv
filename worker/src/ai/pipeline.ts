@@ -13,6 +13,7 @@ export interface ResultadoPipeline {
   palavraChaveImagem: string;
   fonteUrl: string;
   fonteNome: string;
+  topicosApurados: string[];
 }
 
 /**
@@ -127,5 +128,6 @@ export async function processarItem(item: ItemBruto): Promise<ResultadoPipeline 
     palavraChaveImagem: resumo.palavraChaveImagem,
     fonteUrl: item.url,
     fonteNome: item.fonteNome,
+    topicosApurados: resumo.topicos,
   };
 }
