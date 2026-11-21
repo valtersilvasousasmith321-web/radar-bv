@@ -32,6 +32,9 @@ export default function Cabecalho() {
             <span className="font-display text-3xl font-bold text-urgente">BV</span>
           </Link>
           <nav aria-label="Editorias" className="flex flex-wrap gap-7 text-[15px] font-semibold text-navy">
+            <Link href="/" className="relative py-1 transition-colors hover:text-urgente">
+              Início
+            </Link>
             {EDITORIAS.map((e) => (
               <Link
                 key={e.slug}
