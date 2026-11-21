@@ -2,6 +2,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { config } from "../config.js";
 import { log } from "../logger.js";
 import { promptTriagemGemini, promptRedacaoFallback } from "./prompts.js";
+import { pareceErroDeCota, marcarIndisponivel } from "./quotaTracker.js";
 import type { Editoria, ItemBruto, MateriaRedigida, ResumoGemini } from "../types.js";
 
 const genAI = new GoogleGenerativeAI(config.ia.geminiApiKey);
@@ -46,6 +47,7 @@ export async function triarComGemini(item: ItemBruto): Promise<ResumoGemini | nu
     }
     return json;
   } catch (err: any) {
+    if (pareceErroDeCota(err)) await marcarIndisponivel("gemini", String(err?.message ?? err));
     await log("error", "gemini", "Falha na triagem do Gemini", { url: item.url, erro: String(err?.message ?? err) });
     return null;
   }
@@ -71,6 +73,7 @@ export async function redigirComGeminiFallback(params: {
     if (json.insuficiente) return null;
     return json as MateriaRedigida;
   } catch (err: any) {
+    if (pareceErroDeCota(err)) await marcarIndisponivel("gemini", String(err?.message ?? err));
     await log("error", "gemini", "Falha no fallback de redação do Gemini", { erro: String(err?.message ?? err) });
     return null;
   }

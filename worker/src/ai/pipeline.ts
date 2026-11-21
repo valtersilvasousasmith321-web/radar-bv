@@ -3,6 +3,7 @@ import { triarComOllama } from "./ollama.js";
 import { triarComGemini, redigirComGeminiFallback } from "./gemini.js";
 import { redigirComClaude, triarComClaude } from "./claude.js";
 import { redigirComGroqFallback, triarComGroqFallback } from "./groq.js";
+import { estaDisponivel, pareceErroDeCota, marcarIndisponivel } from "./quotaTracker.js";
 import type { ItemBruto, MateriaRedigida } from "../types.js";
 
 export interface ResultadoPipeline {
@@ -36,13 +37,17 @@ export async function processarItem(item: ItemBruto): Promise<ResultadoPipeline 
 
   if (resumo) {
     await log("info", "pipeline", "Triagem resolvida pela IA local (Ollama) — sem gastar cota de nuvem", { url: item.url });
-  } else {
+  } else if (estaDisponivel("gemini")) {
     resumo = await triarComGemini(item);
+  } else {
+    await log("info", "pipeline", "Gemini pulado (sem fôlego recente) — indo direto pro Claude", { url: item.url });
   }
 
-  if (!resumo) {
+  if (!resumo && estaDisponivel("claude")) {
     await log("warning", "pipeline", "Gemini falhou/atingiu cota na triagem — acionando fallback Claude", { url: item.url });
     resumo = await triarComClaude(item);
+  } else if (!resumo) {
+    await log("info", "pipeline", "Claude pulado (sem fôlego recente) — indo direto pro Groq", { url: item.url });
   }
 
   if (!resumo) {
@@ -69,18 +74,25 @@ export async function processarItem(item: ItemBruto): Promise<ResultadoPipeline 
   let materia: MateriaRedigida | null = null;
   let origemIA: "claude" | "gemini" | "groq" = "claude";
 
-  try {
-    materia = await redigirComClaude(paramsRedacao);
-  } catch (err: any) {
-    await log("warning", "pipeline", "Claude falhou/atingiu cota — acionando fallback Gemini", {
-      url: item.url,
-      erro: String(err?.message ?? err),
-    });
+  if (estaDisponivel("claude")) {
+    try {
+      materia = await redigirComClaude(paramsRedacao);
+    } catch (err: any) {
+      if (pareceErroDeCota(err)) await marcarIndisponivel("claude", String(err?.message ?? err));
+      await log("warning", "pipeline", "Claude falhou/atingiu cota — acionando fallback Gemini", {
+        url: item.url,
+        erro: String(err?.message ?? err),
+      });
+    }
+  } else {
+    await log("info", "pipeline", "Claude pulado na redação (sem fôlego recente) — indo direto pro Gemini", { url: item.url });
   }
 
-  if (!materia) {
+  if (!materia && estaDisponivel("gemini")) {
     origemIA = "gemini";
     materia = await redigirComGeminiFallback(paramsRedacao);
+  } else if (!materia) {
+    await log("info", "pipeline", "Gemini pulado na redação (sem fôlego recente) — indo direto pro Groq", { url: item.url });
   }
 
   if (!materia) {

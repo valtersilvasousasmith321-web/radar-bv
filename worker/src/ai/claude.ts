@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { config } from "../config.js";
 import { log } from "../logger.js";
 import { promptRedacaoChefe, promptTriagemGemini } from "./prompts.js";
+import { pareceErroDeCota, marcarIndisponivel } from "./quotaTracker.js";
 import type { Editoria, ItemBruto, MateriaRedigida, ResumoGemini } from "../types.js";
 
 const anthropic = new Anthropic({ apiKey: config.ia.anthropicApiKey });
@@ -58,6 +59,7 @@ export async function triarComClaude(item: ItemBruto): Promise<ResumoGemini | nu
     }
     return json;
   } catch (err: any) {
+    if (pareceErroDeCota(err)) await marcarIndisponivel("claude", String(err?.message ?? err));
     await log("error", "claude", "Falha na triagem de fallback do Claude", { url: item.url, erro: String(err?.message ?? err) });
     return null;
   }

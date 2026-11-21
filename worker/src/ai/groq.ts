@@ -2,6 +2,7 @@ import Groq from "groq-sdk";
 import { config } from "../config.js";
 import { log } from "../logger.js";
 import { promptRedacaoFallback, promptTriagemGemini } from "./prompts.js";
+import { pareceErroDeCota, marcarIndisponivel } from "./quotaTracker.js";
 import type { Editoria, ItemBruto, MateriaRedigida, ResumoGemini } from "../types.js";
 
 const groq = config.ia.groqApiKey ? new Groq({ apiKey: config.ia.groqApiKey }) : null;
@@ -63,6 +64,7 @@ export async function triarComGroqFallback(item: ItemBruto): Promise<ResumoGemin
     if (!json.topicos || json.topicos.length === 0) return null;
     return json;
   } catch (err: any) {
+    if (pareceErroDeCota(err)) await marcarIndisponivel("groq", String(err?.message ?? err));
     await log("critico", "groq", "Falha no último fallback de triagem (Groq/Llama)", { url: item.url, erro: String(err?.message ?? err) });
     return null;
   }
@@ -105,6 +107,7 @@ export async function redigirComGroqFallback(params: {
     if (json.insuficiente) return null;
     return json as MateriaRedigida;
   } catch (err: any) {
+    if (pareceErroDeCota(err)) await marcarIndisponivel("groq", String(err?.message ?? err));
     await log("critico", "groq", "Falha no último fallback (Groq/Llama) — matéria não pode ser redigida", {
       erro: String(err?.message ?? err),
     });
