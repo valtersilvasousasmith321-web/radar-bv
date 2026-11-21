@@ -2,68 +2,80 @@ import fetch from "node-fetch";
 import { config } from "./config.js";
 import { supabase } from "./db.js";
 import { log } from "./logger.js";
+import { escolherMelhorImagem, type CandidatoImagem } from "./ai/editorImagens.js";
 import type { Editoria, ResultadoImagem } from "./types.js";
 
 interface UnsplashResultado {
-  results: Array<{ urls: { regular: string }; user: { name: string } }>;
+  results: Array<{ urls: { regular: string }; user: { name: string }; alt_description: string | null; description: string | null }>;
 }
 interface PexelsResultado {
-  photos: Array<{ src: { large: string }; photographer: string }>;
+  photos: Array<{ src: { large: string }; photographer: string; alt: string | null }>;
 }
 interface PixabayResultado {
-  hits: Array<{ largeImageURL: string; user: string }>;
+  hits: Array<{ largeImageURL: string; user: string; tags: string }>;
 }
 
-async function buscarUnsplash(palavraChave: string): Promise<ResultadoImagem | null> {
-  if (!config.imagens.unsplashAccessKey) return null;
+// Quantas candidatas trazer de cada banco por busca — o suficiente pro
+// Editor de Imagens (item 8) ter opção de verdade pra escolher, sem pedir
+// tanto a ponto de gastar banda/tempo à toa.
+const QTD_CANDIDATAS = 6;
+
+async function buscarCandidatosUnsplash(palavraChave: string): Promise<CandidatoImagem[]> {
+  if (!config.imagens.unsplashAccessKey) return [];
   try {
-    const url = `https://api.unsplash.com/search/photos?query=${encodeURIComponent(palavraChave)}&per_page=1&orientation=landscape`;
+    const url = `https://api.unsplash.com/search/photos?query=${encodeURIComponent(palavraChave)}&per_page=${QTD_CANDIDATAS}&orientation=landscape`;
     const resposta = await fetch(url, {
       headers: { Authorization: `Client-ID ${config.imagens.unsplashAccessKey}` },
       signal: AbortSignal.timeout(8_000), // timeout real — evita travar a publicação esperando a API de imagens
     });
-    if (!resposta.ok) return null;
+    if (!resposta.ok) return [];
     const json = (await resposta.json()) as UnsplashResultado;
-    const foto = json.results?.[0];
-    if (!foto) return null;
-    return { url: foto.urls.regular, credito: `Foto: ${foto.user.name} / Unsplash`, eFallback: false };
+    return (json.results ?? []).map((foto) => ({
+      url: foto.urls.regular,
+      credito: `Foto: ${foto.user.name} / Unsplash`,
+      descricao: foto.alt_description || foto.description || "",
+    }));
   } catch {
-    return null;
+    return [];
   }
 }
 
-async function buscarPexels(palavraChave: string): Promise<ResultadoImagem | null> {
-  if (!config.imagens.pexelsApiKey) return null;
+async function buscarCandidatosPexels(palavraChave: string): Promise<CandidatoImagem[]> {
+  if (!config.imagens.pexelsApiKey) return [];
   try {
-    const url = `https://api.pexels.com/v1/search?query=${encodeURIComponent(palavraChave)}&per_page=1&orientation=landscape`;
+    const url = `https://api.pexels.com/v1/search?query=${encodeURIComponent(palavraChave)}&per_page=${QTD_CANDIDATAS}&orientation=landscape`;
     const resposta = await fetch(url, {
       headers: { Authorization: config.imagens.pexelsApiKey },
       signal: AbortSignal.timeout(8_000),
     });
-    if (!resposta.ok) return null;
+    if (!resposta.ok) return [];
     const json = (await resposta.json()) as PexelsResultado;
-    const foto = json.photos?.[0];
-    if (!foto) return null;
-    return { url: foto.src.large, credito: `Foto: ${foto.photographer} / Pexels`, eFallback: false };
+    return (json.photos ?? []).map((foto) => ({
+      url: foto.src.large,
+      credito: `Foto: ${foto.photographer} / Pexels`,
+      descricao: foto.alt || "",
+    }));
   } catch {
-    return null;
+    return [];
   }
 }
 
-async function buscarPixabay(palavraChave: string): Promise<ResultadoImagem | null> {
-  if (!config.imagens.pixabayApiKey) return null;
+async function buscarCandidatosPixabay(palavraChave: string): Promise<CandidatoImagem[]> {
+  if (!config.imagens.pixabayApiKey) return [];
   try {
-    const url = `https://pixabay.com/api/?key=${config.imagens.pixabayApiKey}&q=${encodeURIComponent(palavraChave)}&image_type=photo&orientation=horizontal&per_page=3&safesearch=true`;
+    const url = `https://pixabay.com/api/?key=${config.imagens.pixabayApiKey}&q=${encodeURIComponent(palavraChave)}&image_type=photo&orientation=horizontal&per_page=${QTD_CANDIDATAS}&safesearch=true`;
     const resposta = await fetch(url, {
       signal: AbortSignal.timeout(8_000),
     });
-    if (!resposta.ok) return null;
+    if (!resposta.ok) return [];
     const json = (await resposta.json()) as PixabayResultado;
-    const foto = json.hits?.[0];
-    if (!foto) return null;
-    return { url: foto.largeImageURL, credito: `Foto: ${foto.user} / Pixabay`, eFallback: false };
+    return (json.hits ?? []).map((foto) => ({
+      url: foto.largeImageURL,
+      credito: `Foto: ${foto.user} / Pixabay`,
+      descricao: foto.tags || "",
+    }));
   } catch {
-    return null;
+    return [];
   }
 }
 
@@ -145,12 +157,15 @@ async function buscarImagemBancoProprio(textoParaCasar: string, editoria: Editor
 }
 
 /**
- * Banco de Imagens de Segurança (Regra de Ouro — item 5):
- * primeiro tenta uma foto PRÓPRIA cadastrada pro assunto (mais fiel à
- * realidade local); se não achar nenhuma, busca foto livre de direitos
- * (Unsplash -> Pixabay -> Pexels) pela palavra-chave; se nenhuma das três
- * encontrar ou falhar, aplica automaticamente a imagem padrão pré-cadastrada
- * da categoria.
+ * Banco de Imagens de Segurança (Regra de Ouro — item 5), com o Editor de
+ * Imagens (item 8) embutido na busca de banco livre: primeiro tenta uma
+ * foto PRÓPRIA cadastrada pro assunto (mais fiel à realidade local); se não
+ * achar nenhuma, busca um PUNHADO de candidatas livres de direitos
+ * (Unsplash -> Pixabay -> Pexels, parando no primeiro banco que trouxer
+ * resultado) e deixa a IA escolher, entre elas, a que combina de verdade
+ * com o conteúdo da matéria — não só a primeira que bateu com a
+ * palavra-chave solta; se nenhuma das três encontrar ou tudo falhar, aplica
+ * automaticamente a imagem padrão pré-cadastrada da categoria.
  */
 export async function obterImagemParaMateria(
   palavraChave: string,
@@ -161,14 +176,14 @@ export async function obterImagemParaMateria(
   const viaBancoProprio = await buscarImagemBancoProprio(textoParaCasar, editoria);
   if (viaBancoProprio) return viaBancoProprio;
 
-  const viaUnsplash = await buscarUnsplash(palavraChave);
-  if (viaUnsplash) return viaUnsplash;
+  let candidatos = await buscarCandidatosUnsplash(palavraChave);
+  if (candidatos.length === 0) candidatos = await buscarCandidatosPixabay(palavraChave);
+  if (candidatos.length === 0) candidatos = await buscarCandidatosPexels(palavraChave);
 
-  const viaPixabay = await buscarPixabay(palavraChave);
-  if (viaPixabay) return viaPixabay;
-
-  const viaPexels = await buscarPexels(palavraChave);
-  if (viaPexels) return viaPexels;
+  if (candidatos.length > 0) {
+    const escolhida = await escolherMelhorImagem(candidatos, textoParaCasar);
+    return { url: escolhida.url, credito: escolhida.credito, eFallback: false };
+  }
 
   await log("info", "images", "Nenhuma imagem livre encontrada — usando fallback de categoria", { palavraChave, editoria });
   return buscarImagemFallback(editoria);
