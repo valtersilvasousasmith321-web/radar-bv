@@ -6,6 +6,7 @@ import { obterImagemParaMateria } from "./images.js";
 import { gerarResumoWhatsApp, enviarParaWhatsApp } from "./whatsapp.js";
 import { revisarCamada1, revisarCamada2 } from "./ai/revisor.js";
 import { verificarFatos } from "./ai/verificadorFatos.js";
+import { verificarDuplicacaoReal } from "./ai/editorChefe.js";
 import type { ResultadoPipeline } from "./ai/pipeline.js";
 
 function gerarSlug(titulo: string): string {
@@ -38,6 +39,15 @@ function calcularProximoSlot(): Date {
 }
 
 /**
+ * Slot de publicação pra matéria urgente (Editor-chefe, item 11): não
+ * espera na fila do gotejamento atrás de matérias comuns — publica quase
+ * na hora (1 min), sem mexer no `proximoSlotPublicacao` das demais.
+ */
+function calcularSlotUrgente(): Date {
+  return new Date(Date.now() + 60_000);
+}
+
+/**
  * Fila de Gotejamento (Regra de Ouro — item 6): se o coletor captura várias
  * notícias de uma vez, salva todas no banco já, mas agenda `data_publicacao`
  * em intervalos de 20-30min entre si, para manter o portal sempre vivo ao
@@ -55,6 +65,21 @@ export async function agendarPublicacao(resultado: ResultadoPipeline, fonteId: s
   const { materia, achados } = revisarCamada1(resultado.materia);
   if (achados.length > 0) {
     await log("warning", "revisor", "Camada 1 encontrou avisos na matéria", { titulo: materia.titulo, achados });
+  }
+
+  // Editor-chefe/Organizador (item 11) — checa duplicação REAL contra as
+  // notícias de verdade já na fila/publicadas nas últimas 24h na mesma
+  // editoria, antes de gastar imagem/Revisor/Verificador com algo que vai
+  // ser descartado de qualquer jeito. Se for duplicata, não cria a notícia
+  // — só fecha a Trava de Silêncio pra essa URL, pra não ficar reprocessando.
+  const organizacao = await verificarDuplicacaoReal(materia);
+  if (organizacao.duplicada) {
+    await log("info", "editorChefe", "Matéria descartada por duplicar notícia já existente", {
+      titulo: materia.titulo,
+      motivo: organizacao.motivo,
+    });
+    await marcarComoProcessada(fonteId, resultado.fonteUrl, hashUrl);
+    return;
   }
 
   const contextoMateria = [materia.titulo, materia.subtitulo, ...(materia.tags ?? [])].join(" ");
@@ -86,7 +111,9 @@ export async function agendarPublicacao(resultado: ResultadoPipeline, fonteId: s
   const aprovadoParaPublicar = revisao.aprovado && verificacao.aprovado;
 
   const slug = gerarSlug(materia.titulo);
-  const dataPublicacao = calcularProximoSlot();
+  // Editor-chefe/Organizador (item 11) — priorização: matéria urgente não
+  // espera atrás das comuns na fila do gotejamento, publica quase na hora.
+  const dataPublicacao = materia.urgente ? calcularSlotUrgente() : calcularProximoSlot();
   const resumoWhatsApp = gerarResumoWhatsApp(materia, slug);
 
   const { data, error } = await supabase
