@@ -4,6 +4,7 @@ import { config } from "./config.js";
 import { marcarComoProcessada } from "./collector.js";
 import { obterImagemParaMateria } from "./images.js";
 import { gerarResumoWhatsApp, enviarParaWhatsApp } from "./whatsapp.js";
+import { revisarCamada1, revisarCamada2 } from "./ai/revisor.js";
 import type { ResultadoPipeline } from "./ai/pipeline.js";
 
 function gerarSlug(titulo: string): string {
@@ -46,10 +47,29 @@ function calcularProximoSlot(): Date {
  * prepara o resumo de WhatsApp (disparado quando o status virar "publicado").
  */
 export async function agendarPublicacao(resultado: ResultadoPipeline, fonteId: string, hashUrl: string): Promise<void> {
-  const { materia, origemIA, palavraChaveImagem } = resultado;
+  const { origemIA, palavraChaveImagem } = resultado;
+
+  // Revisor/Copydesk (item 9) — Camada 1: código, grátis, nunca bloqueia
+  // sozinha, só limpa o que dá pra limpar com segurança e sinaliza o resto.
+  const { materia, achados } = revisarCamada1(resultado.materia);
+  if (achados.length > 0) {
+    await log("warning", "revisor", "Camada 1 encontrou avisos na matéria", { titulo: materia.titulo, achados });
+  }
 
   const contextoMateria = [materia.titulo, materia.subtitulo, ...(materia.tags ?? [])].join(" ");
   const imagem = await obterImagemParaMateria(palavraChaveImagem, materia.editoria, contextoMateria);
+
+  // Camada 2 — IA leve, sempre roda (só ela pega erro de sentido/tom/foto
+  // incoerente). Se reprovar, a matéria não é perdida: cai como rascunho
+  // pra revisão humana em vez de publicar algo com problema real.
+  const revisao = await revisarCamada2(materia, imagem.credito, imagem.eFallback);
+  if (!revisao.aprovado) {
+    await log("warning", "revisor", "Camada 2 reprovou a matéria — enviando como rascunho pra revisão humana", {
+      titulo: materia.titulo,
+      motivo: revisao.motivo,
+    });
+  }
+
   const slug = gerarSlug(materia.titulo);
   const dataPublicacao = calcularProximoSlot();
   const resumoWhatsApp = gerarResumoWhatsApp(materia, slug);
@@ -71,9 +91,9 @@ export async function agendarPublicacao(resultado: ResultadoPipeline, fonteId: s
       fonte_url_original: resultado.fonteUrl,
       fonte_credito: resultado.fonteNome,
       origem_ia: origemIA,
-      status: "agendado",
+      status: revisao.aprovado ? "agendado" : "rascunho",
       urgente: materia.urgente,
-      data_publicacao: dataPublicacao.toISOString(),
+      data_publicacao: revisao.aprovado ? dataPublicacao.toISOString() : null,
     })
     .select("id")
     .single();
@@ -84,7 +104,14 @@ export async function agendarPublicacao(resultado: ResultadoPipeline, fonteId: s
   }
 
   await marcarComoProcessada(fonteId, resultado.fonteUrl, hashUrl, data.id);
-  await log("info", "queue", `Notícia agendada para ${dataPublicacao.toISOString()}`, { noticiaId: data.id, titulo: materia.titulo });
+  await log(
+    "info",
+    "queue",
+    revisao.aprovado
+      ? `Notícia agendada para ${dataPublicacao.toISOString()}`
+      : "Notícia salva como rascunho (reprovada pelo Revisor) — aguardando revisão humana",
+    { noticiaId: data.id, titulo: materia.titulo },
+  );
 }
 
 // Trava simples para esta rotina não sobrepor a si mesma (ela roda a cada
