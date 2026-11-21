@@ -60,7 +60,7 @@ REGRAS INVIOLÁVEIS:
 2. Se o texto bruto for sujeira de página (menus, rodapé, scripts) sem conteúdo noticioso real, retorne "topicos": [] e "assuntoJaCoberto": false.
 3. Extraia de 4 a 5 tópicos curtos e objetivos (máximo 150 palavras no total), só com fatos essenciais: o quê, quem, quando, onde, por quê — apenas o que estiver no texto.
 4. Sugira uma editoria dentre exatamente: ${EDITORIAS_VALIDAS.join(", ")}. Se a fonte já tem editoria padrão ("${params.editoriaPadrao ?? "nenhuma"}"), use-a a menos que o conteúdo claramente pertença a outra.
-5. Sugira uma única palavra-chave (em português, substantivo simples) que descreva a imagem ideal para ilustrar a matéria.
+5. Sugira uma palavra-chave de busca de imagem EM INGLÊS, com 2 a 4 palavras, bem descritiva e concreta (ex.: "dry river drought", "government office meeting", "indigenous land forest"), pensada para buscar em bancos de imagens internacionais (Unsplash/Pixabay/Pexels). NUNCA use uma palavra portuguesa isolada nem um termo ambíguo que possa ser confundido com nome de lugar (ex.: "rio" sozinho retorna fotos da cidade do Rio de Janeiro em vez de um rio comum — descreva a cena em inglês, como "river" ou "riverbank", em vez disso).
 6. Responda SOMENTE com um JSON válido, sem comentários, sem markdown, no formato exato:
 {
   "assuntoJaCoberto": boolean,
