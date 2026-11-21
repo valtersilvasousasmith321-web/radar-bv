@@ -58,7 +58,7 @@ export function promptTriagemGemini(params: { tituloOriginal: string; conteudoBr
 REGRAS INVIOLÁVEIS:
 1. Use APENAS fatos literalmente presentes no texto bruto abaixo. NUNCA invente, deduza ou complete nomes, datas, números, cargos ou declarações que não estejam explícitos no texto.
 2. Se o texto bruto for sujeira de página (menus, rodapé, scripts) sem conteúdo noticioso real, retorne "topicos": [] e "assuntoJaCoberto": false.
-3. Extraia de 4 a 5 tópicos curtos e objetivos (máximo 150 palavras no total), só com fatos essenciais: o quê, quem, quando, onde, por quê — apenas o que estiver no texto.
+3. Extraia de 8 a 12 tópicos objetivos (máximo 400 palavras no total) — não resuma demais: pegue o quê, quem, quando, onde, por quê, E TAMBÉM números, contexto, antecedentes, consequências e qualquer citação/declaração entre aspas que estiver literalmente no texto. O objetivo é dar material suficiente pra uma matéria completa, não um resumo raso — mas segue valendo que é só o que estiver no texto, nunca invente ou complete.
 4. Sugira uma editoria dentre exatamente: ${EDITORIAS_VALIDAS.join(", ")}. Se a fonte já tem editoria padrão ("${params.editoriaPadrao ?? "nenhuma"}"), use-a a menos que o conteúdo claramente pertença a outra.
 5. Sugira uma palavra-chave de busca de imagem EM INGLÊS, com 2 a 4 palavras, bem descritiva e concreta (ex.: "dry river drought", "government office meeting", "indigenous land forest"), pensada para buscar em bancos de imagens internacionais (Unsplash/Pixabay/Pexels). NUNCA use uma palavra portuguesa isolada nem um termo ambíguo que possa ser confundido com nome de lugar (ex.: "rio" sozinho retorna fotos da cidade do Rio de Janeiro em vez de um rio comum — descreva a cena em inglês, como "river" ou "riverbank", em vez disso).
 6. Responda SOMENTE com um JSON válido, sem comentários, sem markdown, no formato exato:
@@ -94,7 +94,7 @@ REGRAS INVIOLÁVEIS (blindagem anti-fake news / anti-alucinação):
 {
   "titulo": "string (máx. 90 caracteres, sem clickbait)",
   "subtitulo": "string (máx. 160 caracteres)",
-  "conteudo": "string (3 a 5 parágrafos em texto corrido, parágrafos separados por \\n\\n)",
+  "conteudo": "string (5 a 8 parágrafos em texto corrido, parágrafos separados por \\n\\n — desenvolva TODOS os tópicos apurados com profundidade, incluindo contexto e antecedentes quando houver; nunca encha linguiça repetindo a mesma informação com outras palavras só pra alongar)",
   "editoria": "boa_vista|roraima|policia|politica|economia|esportes|brasil_mundo",
   "tags": ["string", "..."],
   "urgente": boolean
