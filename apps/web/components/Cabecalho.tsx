@@ -5,23 +5,22 @@ import { LINK_GRUPO_WHATSAPP } from "@/lib/contatos";
 export default function Cabecalho() {
   return (
     <>
-      <div className="bg-navy text-slate-300 text-[13px]">
-        <div className="max-w-6xl mx-auto px-6 py-2 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-4">
-            <span>Boa Vista, RR</span>
-            <span className="text-slate-600">•</span>
-            <span>Informação em tempo real, de Boa Vista para o mundo</span>
+      <div className="bg-navy text-slate-300 text-[12px] md:text-[13px]">
+        <div className="max-w-6xl mx-auto px-6 py-2 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 md:gap-4 min-w-0">
+            <span className="shrink-0 font-medium text-slate-100">Boa Vista, RR</span>
+            <span className="hidden md:inline text-slate-600">•</span>
+            <span className="hidden md:inline truncate">Informação em tempo real, de Boa Vista para o mundo</span>
           </div>
-          <div className="flex items-center gap-5">
-            <a
-              href={LINK_GRUPO_WHATSAPP}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-emerald-300 font-semibold hover:underline flex items-center gap-1.5"
-            >
-              Canal no WhatsApp
-            </a>
-          </div>
+          <a
+            href={LINK_GRUPO_WHATSAPP}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="shrink-0 text-emerald-300 font-semibold hover:underline flex items-center gap-1.5"
+          >
+            <span className="md:hidden">WhatsApp</span>
+            <span className="hidden md:inline">Canal no WhatsApp</span>
+          </a>
         </div>
       </div>
 
