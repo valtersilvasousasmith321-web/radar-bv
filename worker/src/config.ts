@@ -40,7 +40,9 @@ export const config = {
     webhookToken: process.env.WHATSAPP_WEBHOOK_TOKEN ?? "",
   },
   site: {
-    baseUrl: process.env.SITE_BASE_URL ?? "https://radarbv.com.br",
+    // "www." é obrigatório aqui: o domínio sem www tem ficado fora do ar /
+    // com timeout de conexão (SSL/DNS do apex), enquanto o www funciona normal.
+    baseUrl: process.env.SITE_BASE_URL ?? "https://www.radarbv.com.br",
   },
 
   /**
