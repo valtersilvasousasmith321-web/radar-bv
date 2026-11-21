@@ -78,19 +78,54 @@ export async function getNoticiasRelacionadas(noticia: Noticia, limite = 3): Pro
 }
 
 /**
- * Banner pra um slot, já considerando o Motor de Publicidade Inteligente
- * (função `obter_banner_contextual` do schema.sql) quando o Supabase
- * está configurado. Sem Supabase, usa o banner de demonstração daquela
- * posição — garante que todo slot de anúncio sempre mostra algo.
+ * Banner pra um slot. Busca direta na tabela (igual getNoticias faz pras
+ * notícias — select simples, sem função customizada no banco) e escolhe o
+ * melhor candidato aqui no código: quem casa com as tags/editoria da matéria
+ * primeiro, depois quem paga (patrocinador_externo), depois prioridade, com
+ * sorteio entre os empatados. É a mesma lógica que antes vivia numa função
+ * SQL própria (obter_banner_contextual) — trazida pro código porque a
+ * função dependia de permissão/tipo do Postgres que não se confirma só
+ * lendo a tabela, e falhava silenciosamente pro banner de demonstração sem
+ * nunca dar erro visível. Sem Supabase (ou se a consulta falhar), cai no
+ * banner de demonstração daquela posição — garante que todo slot sempre
+ * mostra algo.
  */
 export async function getBanner(posicao: Banner["posicao"], contexto?: { tags?: string[]; editoria?: Editoria }): Promise<Banner | null> {
   if (supabase) {
-    const { data, error } = await supabase.rpc("obter_banner_contextual", {
-      p_posicao: posicao,
-      p_tags: contexto?.tags ?? [],
-      p_editoria: contexto?.editoria ?? null,
-    });
-    if (!error && data && data.length > 0) return data[0] as Banner;
+    const hoje = new Date().toISOString().slice(0, 10);
+    const { data, error } = await supabase
+      .from("banners_publicidade")
+      .select("*")
+      .eq("posicao", posicao)
+      .eq("ativo", true)
+      .lte("data_inicio", hoje)
+      .or(`data_fim.is.null,data_fim.gte.${hoje}`);
+
+    if (!error && data && data.length > 0) {
+      const tags = contexto?.tags ?? [];
+      const editoria = contexto?.editoria;
+
+      const pesoContexto = (b: Banner): number => {
+        const tagsContextuais = b.tags_contextuais ?? [];
+        const editoriasContextuais = b.editorias_contextuais ?? [];
+        if (tagsContextuais.some((t) => tags.includes(t))) return 2;
+        if (editoria && editoriasContextuais.includes(editoria)) return 1;
+        return 0;
+      };
+
+      const comPeso = (data as Banner[]).map((b) => ({ banner: b, peso: pesoContexto(b) }));
+      const maiorPeso = Math.max(...comPeso.map((c) => c.peso));
+      const naFrente = comPeso.filter((c) => c.peso === maiorPeso);
+
+      const pagantesNaFrente = naFrente.filter((c) => c.banner.tipo_anunciante === "patrocinador_externo");
+      const grupoFinal = pagantesNaFrente.length > 0 ? pagantesNaFrente : naFrente;
+
+      const maiorPrioridade = Math.max(...grupoFinal.map((c) => c.banner.prioridade ?? 0));
+      const empatados = grupoFinal.filter((c) => (c.banner.prioridade ?? 0) === maiorPrioridade);
+
+      const escolhido = empatados[Math.floor(Math.random() * empatados.length)];
+      return escolhido.banner;
+    }
   }
   return BANNERS_DEMO[posicao] ?? null;
 }

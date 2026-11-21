@@ -38,6 +38,9 @@ export interface Banner {
   imagem_url: string | null;
   link_destino: string | null;
   link_whatsapp: string | null;
+  tags_contextuais?: string[];
+  editorias_contextuais?: string[];
+  prioridade?: number;
 }
 
 export const EDITORIAS: { slug: Editoria; label: string }[] = [
