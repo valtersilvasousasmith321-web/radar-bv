@@ -48,7 +48,8 @@ function calcularProximoSlot(): Date {
 export async function agendarPublicacao(resultado: ResultadoPipeline, fonteId: string, hashUrl: string): Promise<void> {
   const { materia, origemIA, palavraChaveImagem } = resultado;
 
-  const imagem = await obterImagemParaMateria(palavraChaveImagem, materia.editoria);
+  const contextoMateria = [materia.titulo, materia.subtitulo, ...(materia.tags ?? [])].join(" ");
+  const imagem = await obterImagemParaMateria(palavraChaveImagem, materia.editoria, contextoMateria);
   const slug = gerarSlug(materia.titulo);
   const dataPublicacao = calcularProximoSlot();
   const resumoWhatsApp = gerarResumoWhatsApp(materia, slug);

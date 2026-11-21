@@ -100,12 +100,14 @@ function normalizar(texto: string): string {
 /**
  * Banco de Imagens Próprias: procura, entre as fotos reais cadastradas pelo
  * Valter (obras, prédios públicos, viaturas, rio/seca etc.), alguma cuja tag
- * bata com a palavra-chave da matéria ou com a editoria. Quando existe uma
- * foto nossa pro assunto, ela é sempre preferível a uma foto de banco de
- * imagens internacional — que nunca vai mostrar a rua, o prédio ou a
- * viatura de verdade de Boa Vista.
+ * bata com o CONTEÚDO de verdade da matéria — título, subtítulo e tags da
+ * IA, que é onde aparecem os termos concretos ("Casa da Mulher", "5º
+ * Distrito", "estiagem") — e não só a palavra-chave em inglês usada pra
+ * buscar no Unsplash. Quando existe uma foto nossa pro assunto, ela é
+ * sempre preferível a uma foto de banco de imagens internacional — que
+ * nunca vai mostrar a rua, o prédio ou a viatura de verdade de Boa Vista.
  */
-async function buscarImagemBancoProprio(palavraChave: string, editoria: Editoria): Promise<ResultadoImagem | null> {
+async function buscarImagemBancoProprio(textoParaCasar: string, editoria: Editoria): Promise<ResultadoImagem | null> {
   const { data, error } = await supabase
     .from("imagens_fallback")
     .select("url, descricao, tags")
@@ -114,13 +116,10 @@ async function buscarImagemBancoProprio(palavraChave: string, editoria: Editoria
 
   if (error || !data || data.length === 0) return null;
 
-  const termoBusca = normalizar(palavraChave);
+  const termoBusca = normalizar(textoParaCasar);
   const candidatos = data.filter((img) => {
     const tags: string[] = img.tags ?? [];
-    return tags.some((tag) => {
-      const tagNormalizada = normalizar(tag);
-      return termoBusca.includes(tagNormalizada) || tagNormalizada.includes(termoBusca);
-    });
+    return tags.some((tag) => termoBusca.includes(normalizar(tag)));
   });
 
   // Na editoria "policia" as fotos cadastradas (delegacia, viatura) servem
@@ -142,8 +141,13 @@ async function buscarImagemBancoProprio(palavraChave: string, editoria: Editoria
  * encontrar ou falhar, aplica automaticamente a imagem padrão pré-cadastrada
  * da categoria.
  */
-export async function obterImagemParaMateria(palavraChave: string, editoria: Editoria): Promise<ResultadoImagem> {
-  const viaBancoProprio = await buscarImagemBancoProprio(palavraChave, editoria);
+export async function obterImagemParaMateria(
+  palavraChave: string,
+  editoria: Editoria,
+  contextoMateria?: string,
+): Promise<ResultadoImagem> {
+  const textoParaCasar = [palavraChave, contextoMateria].filter(Boolean).join(" ");
+  const viaBancoProprio = await buscarImagemBancoProprio(textoParaCasar, editoria);
   if (viaBancoProprio) return viaBancoProprio;
 
   const viaUnsplash = await buscarUnsplash(palavraChave);
