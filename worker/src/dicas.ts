@@ -2,6 +2,7 @@ import { supabase } from "./db.js";
 import { log } from "./logger.js";
 import { julgarDicaBairro } from "./ai/pesquisadorBairro.js";
 import { obterImagemParaMateria } from "./images.js";
+import { tentarAdquirirTrava, liberarTrava } from "./vigia.js";
 import type { DicaBairro } from "./types.js";
 
 /**
@@ -114,8 +115,9 @@ async function processarUmaDica(dica: DicaBairro): Promise<void> {
   }
 }
 
-// Trava simples pra este job não sobrepor a si mesmo, igual à fila de gotejamento.
-let processamentoEmExecucao = false;
+// Trava monitorada pelo Vigia (item 13) pra este job não sobrepor a si
+// mesmo, igual à fila de gotejamento.
+const NOME_TRAVA = "processamento-dicas";
 
 /**
  * Job periódico (chamado pelo scheduler): busca dicas pendentes e tenta
@@ -123,8 +125,7 @@ let processamentoEmExecucao = false;
  * não gastar cota de IA de uma vez só caso chegue um pico de mensagens.
  */
 export async function processarDicasPendentes(): Promise<void> {
-  if (processamentoEmExecucao) return;
-  processamentoEmExecucao = true;
+  if (!tentarAdquirirTrava(NOME_TRAVA)) return;
 
   try {
     const { data: pendentes, error } = await supabase
@@ -146,6 +147,6 @@ export async function processarDicasPendentes(): Promise<void> {
       await processarUmaDica(dica);
     }
   } finally {
-    processamentoEmExecucao = false;
+    liberarTrava(NOME_TRAVA);
   }
 }

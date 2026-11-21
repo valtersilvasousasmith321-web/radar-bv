@@ -7,6 +7,7 @@ import { gerarResumoWhatsApp, enviarParaWhatsApp } from "./whatsapp.js";
 import { revisarCamada1, revisarCamada2 } from "./ai/revisor.js";
 import { verificarFatos } from "./ai/verificadorFatos.js";
 import { verificarDuplicacaoReal } from "./ai/editorChefe.js";
+import { tentarAdquirirTrava, liberarTrava } from "./vigia.js";
 import type { ResultadoPipeline } from "./ai/pipeline.js";
 
 function gerarSlug(titulo: string): string {
@@ -156,10 +157,11 @@ export async function agendarPublicacao(resultado: ResultadoPipeline, fonteId: s
   );
 }
 
-// Trava simples para esta rotina não sobrepor a si mesma (ela roda a cada
-// 1 minuto; se o Supabase ou o webhook do WhatsApp demorarem, a próxima
-// chamada do cron não deve iniciar uma segunda leitura/publicação em paralelo).
-let publicacaoEmExecucao = false;
+// Trava monitorada pelo Vigia (item 13) pra esta rotina não sobrepor a si
+// mesma (ela roda a cada 1 minuto; se o Supabase ou o webhook do WhatsApp
+// demorarem, a próxima chamada do cron não deve iniciar uma segunda leitura/
+// publicação em paralelo).
+const NOME_TRAVA = "publicacao-agendada";
 
 /**
  * Job periódico (chamado pelo scheduler): publica as notícias cujo
@@ -167,8 +169,7 @@ let publicacaoEmExecucao = false;
  * Roda a cada 1 minuto — leve, sem custo de IA.
  */
 export async function publicarNoticiasAgendadas(): Promise<void> {
-  if (publicacaoEmExecucao) return;
-  publicacaoEmExecucao = true;
+  if (!tentarAdquirirTrava(NOME_TRAVA)) return;
 
   try {
     const agora = new Date().toISOString();
@@ -195,6 +196,6 @@ export async function publicarNoticiasAgendadas(): Promise<void> {
       }
     }
   } finally {
-    publicacaoEmExecucao = false;
+    liberarTrava(NOME_TRAVA);
   }
 }

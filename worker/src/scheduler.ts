@@ -6,24 +6,24 @@ import { agendarPublicacao, publicarNoticiasAgendadas } from "./queue.js";
 import { executarResumoDiario } from "./resumoDiario.js";
 import { processarDicasPendentes } from "./dicas.js";
 import { supervisionarEquipe } from "./ai/gerencia.js";
+import { tentarAdquirirTrava, liberarTrava, verificarTravasPresas } from "./vigia.js";
 
 /**
- * Trava de execução única (mutex em memória). Evita que dois pulsos
- * jornalísticos corram ao mesmo tempo — cenário que, sem essa trava,
- * acontecia por um bug real encontrado na auditoria: dois cron jobs
- * disparando no mesmo minuto (ver histórico abaixo) podiam coletar o
+ * Trava de execução única (mutex monitorado pelo Vigia — item 13). Evita
+ * que dois pulsos jornalísticos corram ao mesmo tempo — cenário que, sem
+ * essa trava, acontecia por um bug real encontrado na auditoria: dois cron
+ * jobs disparando no mesmo minuto (ver histórico abaixo) podiam coletar o
  * MESMO item inédito em paralelo antes que a Trava de Silêncio tivesse
  * chance de gravar o hash no banco, gastando tokens em duplicidade e
  * podendo publicar a mesma notícia duas vezes.
  */
-let pulsoEmExecucao = false;
+const NOME_TRAVA = "pulso-jornalistico";
 
 export async function executarPulsoJornalistico(origem: string): Promise<void> {
-  if (pulsoEmExecucao) {
+  if (!tentarAdquirirTrava(NOME_TRAVA)) {
     await log("warning", "scheduler", `Pulso (${origem}) ignorado — já há um pulso em execução`);
     return;
   }
-  pulsoEmExecucao = true;
 
   try {
     await log("info", "scheduler", `Iniciando pulso jornalístico (${origem})`);
@@ -54,7 +54,7 @@ export async function executarPulsoJornalistico(origem: string): Promise<void> {
 
     await log("info", "scheduler", `Pulso jornalístico (${origem}) concluído: ${itensInéditos.length} itens processados`);
   } finally {
-    pulsoEmExecucao = false;
+    liberarTrava(NOME_TRAVA);
   }
 }
 
@@ -141,6 +141,12 @@ export function iniciarCronDinamico(): void {
   // esgotada) — só loga quando há algo a reportar, pra manter o sistema
   // autossuficiente sem precisar de ninguém vigiando 24h.
   cron.schedule("20 * * * *", () => supervisionarEquipe(), { timezone: TZ });
+
+  // Consertador/Vigia (item 13 — Serviços Gerais): a cada 5 minutos, checa
+  // se alguma trava (pulso jornalístico, publicação, dicas) ficou presa
+  // além do razoável — sinal de processo travado por um erro que escapou
+  // do try/catch — e destrava sozinho, sem precisar reiniciar o worker.
+  cron.schedule("*/5 * * * *", () => verificarTravasPresas(), { timezone: TZ });
 
   log("info", "scheduler", "Cron Dinâmico iniciado com sucesso", {
     timezone: TZ,
