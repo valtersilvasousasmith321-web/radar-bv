@@ -3,12 +3,13 @@ import { triarComOllama } from "./ollama.js";
 import { triarComGemini, redigirComGeminiFallback } from "./gemini.js";
 import { redigirComClaude, triarComClaude } from "./claude.js";
 import { redigirComGroqFallback, triarComGroqFallback } from "./groq.js";
+import { redigirComOpenRouterFallback, triarComOpenRouterFallback } from "./openrouter.js";
 import { estaDisponivel, pareceErroDeCota, marcarIndisponivel } from "./quotaTracker.js";
 import type { ItemBruto, MateriaRedigida } from "../types.js";
 
 export interface ResultadoPipeline {
   materia: MateriaRedigida;
-  origemIA: "claude" | "gemini" | "groq";
+  origemIA: "claude" | "gemini" | "groq" | "openrouter";
   palavraChaveImagem: string;
   fonteUrl: string;
   fonteNome: string;
@@ -50,13 +51,19 @@ export async function processarItem(item: ItemBruto): Promise<ResultadoPipeline 
     await log("info", "pipeline", "Claude pulado (sem fôlego recente) — indo direto pro Groq", { url: item.url });
   }
 
-  if (!resumo) {
-    await log("warning", "pipeline", "Claude falhou no fallback de triagem — acionando último fallback (Groq)", { url: item.url });
+  if (!resumo && estaDisponivel("groq")) {
+    await log("warning", "pipeline", "Claude falhou no fallback de triagem — acionando Groq", { url: item.url });
     resumo = await triarComGroqFallback(item);
+  } else if (!resumo) {
+    await log("info", "pipeline", "Groq pulado (sem fôlego recente) — indo direto pro OpenRouter", { url: item.url });
   }
 
   if (!resumo) {
-    return null; // sujeira de página, ou triagem falhou nos 3 provedores
+    resumo = await triarComOpenRouterFallback(item);
+  }
+
+  if (!resumo) {
+    return null; // sujeira de página, ou triagem falhou em todos os provedores
   }
   if (resumo.assuntoJaCoberto) {
     await log("info", "pipeline", "Assunto já coberto nas últimas 24h — descartado", { url: item.url });
@@ -72,7 +79,7 @@ export async function processarItem(item: ItemBruto): Promise<ResultadoPipeline 
 
   // --- 3. Redação-Chefe (Claude) com Fallback automático em cascata ---
   let materia: MateriaRedigida | null = null;
-  let origemIA: "claude" | "gemini" | "groq" = "claude";
+  let origemIA: "claude" | "gemini" | "groq" | "openrouter" = "claude";
 
   if (estaDisponivel("claude")) {
     try {
@@ -95,13 +102,18 @@ export async function processarItem(item: ItemBruto): Promise<ResultadoPipeline 
     await log("info", "pipeline", "Gemini pulado na redação (sem fôlego recente) — indo direto pro Groq", { url: item.url });
   }
 
-  if (!materia) {
+  if (!materia && estaDisponivel("groq")) {
     origemIA = "groq";
     materia = await redigirComGroqFallback(paramsRedacao);
   }
 
   if (!materia) {
-    await log("critico", "pipeline", "Todas as IAs (Claude, Gemini, Groq) falharam para este item — descartado", {
+    origemIA = "openrouter";
+    materia = await redigirComOpenRouterFallback(paramsRedacao);
+  }
+
+  if (!materia) {
+    await log("critico", "pipeline", "Todas as IAs da bancada falharam para este item — descartado", {
       url: item.url,
     });
     return null;

@@ -7,7 +7,7 @@ export type Editoria =
   | "esportes"
   | "brasil_mundo";
 
-export type OrigemIA = "claude" | "gemini" | "groq" | "manual";
+export type OrigemIA = "claude" | "gemini" | "groq" | "openrouter" | "manual";
 
 export interface Noticia {
   id: string;
@@ -67,5 +67,6 @@ export const ORIGEM_IA_LABEL: Record<OrigemIA, string> = {
   claude: "Claude",
   gemini: "Gemini",
   groq: "Groq (Llama)",
+  openrouter: "OpenRouter",
   manual: "equipe do Radar BV",
 };

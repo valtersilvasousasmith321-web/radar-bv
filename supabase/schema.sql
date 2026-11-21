@@ -18,7 +18,7 @@ do $$ begin
 exception when duplicate_object then null; end $$;
 
 do $$ begin
-  create type origem_ia as enum ('claude', 'gemini', 'groq', 'manual');
+  create type origem_ia as enum ('claude', 'gemini', 'groq', 'openrouter', 'manual');
 exception when duplicate_object then null; end $$;
 
 do $$ begin

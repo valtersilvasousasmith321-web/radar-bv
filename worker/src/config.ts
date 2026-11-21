@@ -23,6 +23,11 @@ export const config = {
     geminiApiKey: obrigatoria("GEMINI_API_KEY"),
     anthropicApiKey: obrigatoria("ANTHROPIC_API_KEY"),
     groqApiKey: process.env.GROQ_API_KEY ?? "",
+    // Bancada de IA maior (item "Infraestrutura de IA" do plano): mais um
+    // elo gratuito na cascata pra espalhar o uso e bater cota com menos
+    // frequência. Opcional — some sozinho da cascata se a chave não for
+    // configurada ainda.
+    openrouterApiKey: process.env.OPENROUTER_API_KEY ?? "",
     // IA própria/local via Ollama (serviço pesado da triagem, sem cota/custo
     // nenhum — roda no próprio computador). Totalmente opcional: se o Ollama
     // não estiver instalado/rodando, o sistema cai sozinho pra cascata de
