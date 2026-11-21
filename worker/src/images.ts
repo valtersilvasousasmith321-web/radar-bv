@@ -89,13 +89,63 @@ async function buscarImagemFallback(editoria: Editoria): Promise<ResultadoImagem
   };
 }
 
+/** Normaliza texto pra comparação de tags: minúsculo e sem acento */
+function normalizar(texto: string): string {
+  return texto
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "");
+}
+
+/**
+ * Banco de Imagens Próprias: procura, entre as fotos reais cadastradas pelo
+ * Valter (obras, prédios públicos, viaturas, rio/seca etc.), alguma cuja tag
+ * bata com a palavra-chave da matéria ou com a editoria. Quando existe uma
+ * foto nossa pro assunto, ela é sempre preferível a uma foto de banco de
+ * imagens internacional — que nunca vai mostrar a rua, o prédio ou a
+ * viatura de verdade de Boa Vista.
+ */
+async function buscarImagemBancoProprio(palavraChave: string, editoria: Editoria): Promise<ResultadoImagem | null> {
+  const { data, error } = await supabase
+    .from("imagens_fallback")
+    .select("url, descricao, tags")
+    .eq("editoria", editoria)
+    .eq("padrao", false);
+
+  if (error || !data || data.length === 0) return null;
+
+  const termoBusca = normalizar(palavraChave);
+  const candidatos = data.filter((img) => {
+    const tags: string[] = img.tags ?? [];
+    return tags.some((tag) => {
+      const tagNormalizada = normalizar(tag);
+      return termoBusca.includes(tagNormalizada) || tagNormalizada.includes(termoBusca);
+    });
+  });
+
+  // Na editoria "policia" as fotos cadastradas (delegacia, viatura) servem
+  // pra qualquer ocorrência policial, mesmo sem bater palavra por palavra
+  // na tag — então, sem match direto, usa qualquer uma da editoria.
+  const pool = candidatos.length > 0 ? candidatos : editoria === "policia" ? data : [];
+  if (pool.length === 0) return null;
+
+  // Entre as que servem, sorteia uma, pra não repetir sempre a mesma foto
+  const escolhida = pool[Math.floor(Math.random() * pool.length)];
+  return { url: escolhida.url, credito: "Foto: Radar BV", eFallback: false };
+}
+
 /**
  * Banco de Imagens de Segurança (Regra de Ouro — item 5):
- * busca foto livre de direitos (Unsplash -> Pixabay -> Pexels) pela
- * palavra-chave; se nenhuma das três encontrar ou falhar, aplica
- * automaticamente a imagem padrão pré-cadastrada da categoria.
+ * primeiro tenta uma foto PRÓPRIA cadastrada pro assunto (mais fiel à
+ * realidade local); se não achar nenhuma, busca foto livre de direitos
+ * (Unsplash -> Pixabay -> Pexels) pela palavra-chave; se nenhuma das três
+ * encontrar ou falhar, aplica automaticamente a imagem padrão pré-cadastrada
+ * da categoria.
  */
 export async function obterImagemParaMateria(palavraChave: string, editoria: Editoria): Promise<ResultadoImagem> {
+  const viaBancoProprio = await buscarImagemBancoProprio(palavraChave, editoria);
+  if (viaBancoProprio) return viaBancoProprio;
+
   const viaUnsplash = await buscarUnsplash(palavraChave);
   if (viaUnsplash) return viaUnsplash;
 
