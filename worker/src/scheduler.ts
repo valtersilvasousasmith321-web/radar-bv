@@ -6,6 +6,7 @@ import { agendarPublicacao, publicarNoticiasAgendadas } from "./queue.js";
 import { executarResumoDiario } from "./resumoDiario.js";
 import { processarDicasPendentes } from "./dicas.js";
 import { supervisionarEquipe } from "./ai/gerencia.js";
+import { gerarRelatorioDesempenho } from "./ai/analista.js";
 import { tentarAdquirirTrava, liberarTrava, verificarTravasPresas } from "./vigia.js";
 
 /**
@@ -147,6 +148,12 @@ export function iniciarCronDinamico(): void {
   // além do razoável — sinal de processo travado por um erro que escapou
   // do try/catch — e destrava sozinho, sem precisar reiniciar o worker.
   cron.schedule("*/5 * * * *", () => verificarTravasPresas(), { timezone: TZ });
+
+  // Analista de Desempenho/Estratégia (item 15): toda segunda às 08h10,
+  // gera o relatório semanal de desempenho real do portal (visualizações
+  // por editoria, CTR de banners) — alimenta o futuro Painel do
+  // Administrador (item 22).
+  cron.schedule("10 8 * * 1", () => gerarRelatorioDesempenho(), { timezone: TZ });
 
   log("info", "scheduler", "Cron Dinâmico iniciado com sucesso", {
     timezone: TZ,

@@ -1,7 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Banner } from "@/lib/types";
+
+/** Item 15 — Analista de Desempenho/Estratégia: registra visualização/clique
+ * real de banner. Sempre "fire and forget" (keepalive garante que o clique
+ * seja registrado mesmo a página já estando saindo pro link de destino). */
+function registrarMetricaBanner(id: string, tipo: "visualizacao" | "clique") {
+  fetch("/api/metricas/banner", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id, tipo }),
+    keepalive: true,
+  }).catch(() => {});
+}
 
 /**
  * Renderiza um banner já resolvido pelo Motor de Publicidade Inteligente
@@ -16,12 +28,20 @@ import type { Banner } from "@/lib/types";
  */
 export default function BannerAnuncio({ banner, variante = "caixa" }: { banner: Banner | null; variante?: "caixa" | "faixa" }) {
   const [imagemFalhou, setImagemFalhou] = useState(false);
+  const jaRegistrouView = useRef(false);
+
+  useEffect(() => {
+    if (!banner || jaRegistrouView.current) return;
+    jaRegistrouView.current = true;
+    registrarMetricaBanner(banner.id, "visualizacao");
+  }, [banner]);
 
   if (!banner) return null;
 
   const href = banner.link_whatsapp ?? banner.link_destino ?? "#";
   const mostrarImagem = Boolean(banner.imagem_url) && !imagemFalhou;
   const textoBotao = banner.tipo_anunciante === "captacao_anunciante" ? "Fale com o comercial" : "Saiba mais";
+  const aoClicar = () => registrarMetricaBanner(banner.id, "clique");
 
   if (variante === "faixa") {
     // Banner horizontal (970x250 / 1940x500 — proporção 97:25): quando a
@@ -30,6 +50,7 @@ export default function BannerAnuncio({ banner, variante = "caixa" }: { banner: 
     return (
       <a
         href={href}
+        onClick={aoClicar}
         className="block bg-white border-[1.5px] border-dashed border-slate-300 rounded-xl p-3 shadow-sm transition-shadow hover:shadow-md"
       >
         <span className="block text-[11px] text-slate-400 uppercase tracking-wide mb-2 px-1">Publicidade</span>
@@ -58,6 +79,7 @@ export default function BannerAnuncio({ banner, variante = "caixa" }: { banner: 
   return (
     <a
       href={href}
+      onClick={aoClicar}
       className="block bg-white border border-slate-200 rounded-xl p-3 shadow-sm transition-shadow hover:shadow-md"
     >
       <span className="block text-[11px] text-slate-400 uppercase tracking-wide mb-2 px-1">Publicidade — rede Radar BV</span>

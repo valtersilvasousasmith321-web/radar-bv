@@ -7,6 +7,7 @@ import Rodape from "@/components/Rodape";
 import BannerAnuncio from "@/components/BannerAnuncio";
 import BotaoCompartilhar from "@/components/BotaoCompartilhar";
 import { CardNoticiaCompacto } from "@/components/CardNoticia";
+import RegistrarVisualizacao from "@/components/RegistrarVisualizacao";
 import { getBanner, getNoticiaPorSlug, getNoticiasRelacionadas } from "@/lib/data";
 import { LINK_GRUPO_WHATSAPP } from "@/lib/contatos";
 import { NOME_EDITORIA, ORIGEM_IA_LABEL } from "@/lib/types";
@@ -46,6 +47,7 @@ export default async function PaginaNoticia({ params }: ParametrosRota) {
   return (
     <>
       <Cabecalho />
+      <RegistrarVisualizacao id={noticia.id} />
       <main className="max-w-6xl mx-auto w-full px-6 py-10 flex flex-wrap gap-10">
         <article className="flex-[999_1_640px] min-w-0">
           <div className="flex items-center gap-2.5 text-[13px] text-slate-400 mb-4">

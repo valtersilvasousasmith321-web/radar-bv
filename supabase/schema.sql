@@ -303,6 +303,31 @@ create table if not exists resumos_diarios_enviados (
 );
 
 -- ----------------------------------------------------------------------------
+-- Item 15 — Analista de Desempenho/Estratégia: funções que o site chama (via
+-- service_role) pra incrementar visualizacoes/cliques de verdade. Ver
+-- migracao-metricas-desempenho.sql pro contexto completo.
+-- ----------------------------------------------------------------------------
+create or replace function incrementar_visualizacao_noticia(p_id uuid)
+returns void
+language sql
+as $$
+  update noticias set visualizacoes = visualizacoes + 1 where id = p_id;
+$$;
+
+create or replace function incrementar_metrica_banner(p_id uuid, p_campo text)
+returns void
+language plpgsql
+as $$
+begin
+  if p_campo = 'visualizacoes' then
+    update banners_publicidade set visualizacoes = visualizacoes + 1 where id = p_id;
+  elsif p_campo = 'cliques' then
+    update banners_publicidade set cliques = cliques + 1 where id = p_id;
+  end if;
+end;
+$$;
+
+-- ----------------------------------------------------------------------------
 -- Seed inicial: fontes de exemplo e imagens de fallback padrão
 -- ----------------------------------------------------------------------------
 insert into fontes_monitoradas (nome, url_base, tipo, editoria_padrao)
