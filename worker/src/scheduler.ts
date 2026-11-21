@@ -103,8 +103,19 @@ export function iniciarCronDinamico(): void {
     cron.schedule(horario, () => executarPulsoJornalistico("noturno-1h30"), { timezone: TZ });
   }
 
-  // Pulso único da madrugada: 05h30
-  cron.schedule("30 5 * * *", () => executarPulsoJornalistico("madrugada-05h30"), { timezone: TZ });
+  // Pesquisador da madrugada (item 4 do plano): a janela de 23h01 a 06h59
+  // era a única parte do dia sem nenhum pulso (baixo movimento de notícia,
+  // mas não ZERO — acidente, ocorrência policial, resultado de jogo à noite
+  // etc. ainda acontecem). Em vez de deixar o portal parado até o pulso
+  // diurno das 07h00, roda o MESMO pulso jornalístico de sempre (coleta ->
+  // triagem -> redação -> Fila de Gotejamento) a cada 1h30, igual ao
+  // noturno — sem código novo, só mais pulsos. O resultado cai como
+  // "agendado" (nunca publica fora de hora): já fica apurado e redigido,
+  // pronto na fila pra sair espaçado assim que o dia começa, em vez de
+  // competir por tempo/cota de IA com o primeiro pulso diurno das 07h00.
+  for (const horario of ["30 23 * * *", "0 1 * * *", "30 2 * * *", "0 4 * * *", "30 5 * * *"]) {
+    cron.schedule(horario, () => executarPulsoJornalistico("madrugada-baixo-movimento"), { timezone: TZ });
+  }
 
   // Fila de Gotejamento: verifica a cada 1 minuto se há notícia agendada
   // para publicar agora. Operação leve, sem custo de IA.
