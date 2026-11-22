@@ -6,6 +6,7 @@ import { obterImagemParaMateria } from "./images.js";
 import { gerarResumoWhatsApp, enviarParaWhatsApp } from "./whatsapp.js";
 import { revisarCamada1, revisarCamada2 } from "./ai/revisor.js";
 import { verificarFatos } from "./ai/verificadorFatos.js";
+import { verificarCompliance } from "./ai/juridico.js";
 import { avaliarInfografico } from "./ai/infografista.js";
 import { verificarDuplicacaoReal } from "./ai/editorChefe.js";
 import { tentarAdquirirTrava, liberarTrava } from "./vigia.js";
@@ -111,7 +112,19 @@ export async function agendarPublicacao(resultado: ResultadoPipeline, fonteId: s
     });
   }
 
-  const aprovadoParaPublicar = revisao.aprovado && verificacao.aprovado;
+  // Jurídico/Compliance Editorial (item 20, prioritário) — checa risco
+  // jurídico específico: exposição de menor, presunção de inocência e
+  // difamação. Roda independente do Revisor e do Verificador de Fatos; se
+  // QUALQUER um dos três reprovar, a matéria vai como rascunho.
+  const compliance = await verificarCompliance(materia);
+  if (!compliance.aprovado) {
+    await log("warning", "juridico", "Checagem jurídica reprovou a matéria — enviando como rascunho pra revisão humana", {
+      titulo: materia.titulo,
+      motivo: compliance.motivo,
+    });
+  }
+
+  const aprovadoParaPublicar = revisao.aprovado && verificacao.aprovado && compliance.aprovado;
 
   // Infografista (item 18) — só gera infográfico quando a matéria realmente
   // tem dado numérico comparável ou sequência de eventos datados; a maioria
