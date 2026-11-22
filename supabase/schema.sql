@@ -72,6 +72,7 @@ create table if not exists fontes_monitoradas (
   ultima_verificacao timestamptz,
   ultimo_erro       text,
   erros_consecutivos smallint not null default 0,          -- isolamento de fontes
+  limite_diario     smallint,                             -- teto de notícias/dia desta fonte (null = sem limite)
   criado_em         timestamptz not null default now()
 );
 
@@ -375,6 +376,12 @@ values
   ('Busca: Educação', 'educação em Roraima e Boa Vista', 'busca', 'educacao'),
   ('Busca: Cultura', 'cultura em Roraima e Boa Vista', 'busca', 'cultura')
 on conflict do nothing;
+
+-- Equilíbrio de Proporção (flagrado na auditoria de 21/11/2026): "Busca:
+-- Brasil e Mundo" é um tema sempre-renovado que, sem teto, dominava o feed
+-- em cima da cobertura local — que é o foco principal do portal. Limita a
+-- no máximo 5 notícias/dia vindas dessa fonte.
+update fontes_monitoradas set limite_diario = 5 where nome = 'Busca: Brasil e Mundo';
 
 -- Rede própria (interno_ecossistema) + banner de captação comercial
 insert into banners_publicidade

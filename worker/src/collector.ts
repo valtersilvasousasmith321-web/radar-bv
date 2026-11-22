@@ -295,7 +295,49 @@ async function coletarHtml(fonte: FonteMonitorada): Promise<ItemBruto[]> {
  * Isolamento de Fontes (Regra de Ouro — item 5): erro em uma fonte não
  * derruba a coleta das demais. Contabiliza erros consecutivos por fonte.
  */
+/**
+ * Equilíbrio de Proporção (flagrado na auditoria de 21/11/2026 — Valter
+ * notou "muita matéria do Brasil e do mundo" dominando o feed): fontes de
+ * tema muito amplo e sempre-renovado (ex.: busca nacional/internacional)
+ * trazem item inédito quase toda hora, enquanto fontes locais (Boa Vista,
+ * bairros) têm bem menos novidade por ciclo — sem controle, isso lotava o
+ * portal de notícia de fora e sufocava a cobertura local, que é o foco
+ * principal do Radar BV. Quando a fonte tem `limite_diario` configurado,
+ * conta quantas notícias já vieram dela nas últimas 24h e, se já bateu o
+ * teto, pula a coleta inteira desse ciclo pra essa fonte (nem gasta
+ * chamada de busca/IA à toa).
+ */
+async function dentroDoLimiteDiario(fonte: FonteMonitorada): Promise<boolean> {
+  if (!fonte.limite_diario) return true;
+
+  const desde = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const { count, error } = await supabase
+    .from("noticias")
+    .select("id", { count: "exact", head: true })
+    .eq("fonte_id", fonte.id)
+    .gte("criado_em", desde);
+
+  if (error) {
+    // Falha na contagem não pode travar a coleta — deixa passar nesse ciclo.
+    await log("warning", "collector", "Falha ao checar limite diário da fonte — coletando normalmente", {
+      fonteId: fonte.id,
+      erro: error.message,
+    });
+    return true;
+  }
+
+  return (count ?? 0) < fonte.limite_diario;
+}
+
 async function coletarDeUmaFonte(fonte: FonteMonitorada): Promise<ItemBruto[]> {
+  if (!(await dentroDoLimiteDiario(fonte))) {
+    await log("info", "collector", `Fonte "${fonte.nome}" já atingiu o limite diário — coleta pulada neste ciclo`, {
+      fonteId: fonte.id,
+      limite: fonte.limite_diario,
+    });
+    return [];
+  }
+
   try {
     const itens =
       fonte.tipo === "rss"

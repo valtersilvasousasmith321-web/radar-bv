@@ -28,6 +28,13 @@ export interface FonteMonitorada {
   ativa: boolean;
   confiabilidade: number;
   erros_consecutivos: number;
+  /**
+   * Teto de notícias publicadas/agendadas por dia vindas desta fonte
+   * (null = sem limite). Existe pra evitar que uma fonte de tema muito
+   * amplo e sempre-renovado (ex.: "Busca: Brasil e Mundo") domine
+   * desproporcionalmente o feed do portal, que é primariamente local.
+   */
+  limite_diario: number | null;
 }
 
 /** Item bruto extraído de um feed RSS/HTML, antes de qualquer IA */

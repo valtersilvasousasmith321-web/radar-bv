@@ -173,8 +173,19 @@ export async function obterImagemParaMateria(
   contextoMateria?: string,
 ): Promise<ResultadoImagem> {
   const textoParaCasar = [palavraChave, contextoMateria].filter(Boolean).join(" ");
-  const viaBancoProprio = await buscarImagemBancoProprio(textoParaCasar, editoria);
-  if (viaBancoProprio) return viaBancoProprio;
+
+  // Flagrado na auditoria de 21/11/2026: o Banco de Imagens Próprias (fotos
+  // reais de Boa Vista/Roraima) casava pela TAG batendo em qualquer parte do
+  // texto, sem checar editoria — então uma notícia de "brasil_mundo" que
+  // mencionasse "prefeito" ou "prefeitura" (termo genérico, comum em notícia
+  // de qualquer cidade do Brasil) podia sair ilustrada com a foto real da
+  // Prefeitura de Boa Vista, dando a entender que o fato aconteceu aqui.
+  // Editoria "brasil_mundo" é, por definição, sobre lugar que NÃO é
+  // Roraima — nunca pode usar uma foto real local.
+  if (editoria !== "brasil_mundo") {
+    const viaBancoProprio = await buscarImagemBancoProprio(textoParaCasar, editoria);
+    if (viaBancoProprio) return viaBancoProprio;
+  }
 
   let candidatos = await buscarCandidatosUnsplash(palavraChave);
   if (candidatos.length === 0) candidatos = await buscarCandidatosPixabay(palavraChave);
