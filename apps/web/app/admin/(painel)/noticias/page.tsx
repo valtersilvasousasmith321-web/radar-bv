@@ -31,9 +31,17 @@ export default async function PaginaNoticiasAdmin({
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="font-display text-2xl font-bold text-navy">Notícias</h1>
-        <p className="text-sm text-slate-500 mt-1">{noticias.length} notícia(s) nesta visão.</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="font-display text-2xl font-bold text-navy">Notícias</h1>
+          <p className="text-sm text-slate-500 mt-1">{noticias.length} notícia(s) nesta visão.</p>
+        </div>
+        <Link
+          href="/admin/noticias/nova"
+          className="shrink-0 bg-esmeralda text-white font-semibold text-sm px-4 py-2.5 rounded-md hover:bg-emerald-700"
+        >
+          + Nova notícia
+        </Link>
       </div>
 
       <div className="flex gap-2">

@@ -35,13 +35,27 @@ export interface FonteMonitorada {
   id: string;
   nome: string;
   url_base: string;
-  tipo: "rss" | "html" | "api" | "busca";
+  tipo: "rss" | "html" | "api" | "busca" | "pdf";
   editoria_padrao: Editoria | null;
   ativa: boolean;
   confiabilidade: number;
   ultima_verificacao: string | null;
   ultimo_erro: string | null;
   erros_consecutivos: number;
+  criado_em: string;
+}
+
+/** Foto no banco de fotos reutilizável do painel admin (upload manual do
+ * Valter), separado do `imagens_fallback` (que é só pro pipeline de IA usar
+ * quando não acha imagem via Unsplash/Pexels/Pixabay). Serve pra trocar a
+ * foto de uma notícia já publicada e pra publicar notícias manuais. */
+export interface FotoBanco {
+  id: string;
+  url: string;
+  caminho_storage: string;
+  descricao: string | null;
+  editoria: Editoria | null;
+  enviada_por: string | null;
   criado_em: string;
 }
 

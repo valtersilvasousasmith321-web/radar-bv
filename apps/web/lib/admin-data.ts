@@ -5,6 +5,7 @@ import type {
   Dica,
   DestinoWhatsApp,
   FonteMonitorada,
+  FotoBanco,
   Noticia,
   Reclamacao,
   RelatorioRedacao,
@@ -66,6 +67,20 @@ export async function listarFontes(): Promise<FonteMonitorada[]> {
   const { data, error } = await db.from("fontes_monitoradas").select("*").order("criado_em", { ascending: false });
   if (error) throw new Error(`Falha ao listar fontes: ${error.message}`);
   return (data ?? []) as FonteMonitorada[];
+}
+
+export async function listarFotos(): Promise<FotoBanco[]> {
+  const db = supabaseAdmin();
+  const { data, error } = await db.from("banco_fotos").select("*").order("criado_em", { ascending: false }).limit(200);
+  if (error) throw new Error(`Falha ao listar fotos: ${error.message}`);
+  return (data ?? []) as FotoBanco[];
+}
+
+export async function obterFotoPorId(id: string): Promise<FotoBanco | null> {
+  const db = supabaseAdmin();
+  const { data, error } = await db.from("banco_fotos").select("*").eq("id", id).maybeSingle();
+  if (error) throw new Error(`Falha ao buscar foto: ${error.message}`);
+  return (data as FotoBanco) ?? null;
 }
 
 export async function listarBanners(): Promise<Banner[]> {

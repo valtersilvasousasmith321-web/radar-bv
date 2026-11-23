@@ -6,6 +6,7 @@ import { usuarioLogado } from "@/lib/auth";
 const ITENS_NAV = [
   { href: "/admin", label: "Dashboard" },
   { href: "/admin/noticias", label: "Notícias" },
+  { href: "/admin/fotos", label: "Fotos" },
   { href: "/admin/dicas", label: "Dicas dos Leitores" },
   { href: "/admin/ouvidoria", label: "Ouvidoria" },
   { href: "/admin/redacao-ia", label: "Central de Transparência" },
