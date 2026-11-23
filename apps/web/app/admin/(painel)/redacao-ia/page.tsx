@@ -25,7 +25,19 @@ export default async function PaginaRedacaoIA({
 }) {
   const { tipo } = await searchParams;
   const filtro = tipo && tipo !== "todas" ? (tipo as TipoRelatorioRedacao) : undefined;
-  const relatorios = await listarRelatorios(filtro);
+
+  // Blindagem (23/11/2026): essa página deu "Application error" sem detalhe
+  // nenhum pro Valter ver — sem isso, um erro de banco aqui derruba a página
+  // inteira e ninguém consegue saber o motivo real sem abrir o Vercel. Com
+  // o try/catch, se der erro de novo, aparece a mensagem de verdade na tela
+  // em vez do erro genérico do Next.js.
+  let relatorios: Awaited<ReturnType<typeof listarRelatorios>> = [];
+  let erroCarregamento: string | null = null;
+  try {
+    relatorios = await listarRelatorios(filtro);
+  } catch (err: any) {
+    erroCarregamento = String(err?.message ?? err);
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -52,6 +64,12 @@ export default async function PaginaRedacaoIA({
           </Link>
         ))}
       </div>
+
+      {erroCarregamento && (
+        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-md px-3.5 py-2.5">
+          Não consegui carregar os relatos: {erroCarregamento}
+        </div>
+      )}
 
       <div className="flex flex-col gap-4">
         {relatorios.map((r) => (
@@ -114,7 +132,7 @@ export default async function PaginaRedacaoIA({
           </div>
         ))}
 
-        {relatorios.length === 0 && (
+        {relatorios.length === 0 && !erroCarregamento && (
           <div className="bg-white rounded-xl border border-slate-200 px-4 py-8 text-center text-slate-400 text-sm">
             Nenhum relato por aqui ainda.
           </div>
