@@ -21,6 +21,24 @@ interface PexelsResultado {
 interface PixabayResultado {
   hits: Array<{ largeImageURL: string; user: string; tags: string }>;
 }
+interface WikimediaResultado {
+  query?: {
+    pages?: Record<
+      string,
+      {
+        title?: string;
+        imageinfo?: Array<{
+          url: string;
+          thumburl?: string;
+          extmetadata?: { Artist?: { value: string }; ImageDescription?: { value: string } };
+        }>;
+      }
+    >;
+  };
+}
+interface OpenverseResultado {
+  results: Array<{ url: string; title: string | null; creator: string | null; license: string }>;
+}
 
 // Quantas candidatas trazer de cada banco por busca — o suficiente pro
 // Editor de Imagens (item 8) ter opção de verdade pra escolher, sem pedir
@@ -80,6 +98,72 @@ async function buscarCandidatosPixabay(palavraChave: string): Promise<CandidatoI
       url: foto.largeImageURL,
       credito: `Foto: ${foto.user} / Pixabay`,
       descricao: foto.tags || "",
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Pesquisador de Imagem (22/11/2026) — mais dois bancos de busca, pra dar
+ * mais chance real de achar foto compatível antes de cair no genérico.
+ * Nenhum dos dois exige chave de API (busca pública, sem autenticação):
+ *
+ * Wikimedia Commons: o acervo de mídia livre da Wikipédia — milhões de
+ * fotos de prédios, cidades, eventos, pessoas públicas, países inteiros,
+ * TODAS sob licença livre (Creative Commons ou domínio público) por regra
+ * do próprio Commons, então nenhuma checagem extra de licença é necessária
+ * aqui (mesmo princípio de confiança já usado pro Unsplash/Pixabay/Pexels).
+ */
+async function buscarCandidatosWikimedia(palavraChave: string): Promise<CandidatoImagem[]> {
+  try {
+    const url =
+      `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6` +
+      `&gsrsearch=${encodeURIComponent(palavraChave)}&gsrlimit=${QTD_CANDIDATAS}` +
+      `&prop=imageinfo&iiprop=url|extmetadata&iiurlwidth=1280&format=json&origin=*`;
+    const resposta = await fetch(url, { signal: AbortSignal.timeout(8_000) });
+    if (!resposta.ok) return [];
+    const json = (await resposta.json()) as WikimediaResultado;
+    const paginas = Object.values(json.query?.pages ?? {});
+
+    const candidatos: CandidatoImagem[] = [];
+    for (const pagina of paginas) {
+      const info = pagina.imageinfo?.[0];
+      const urlFoto = info?.thumburl || info?.url;
+      // Filtra fora ícone/mapa/documento (svg, pdf, tif) — só foto de verdade.
+      if (!urlFoto || !/\.(jpe?g|png)(\?|$)/i.test(urlFoto)) continue;
+      const artista = (info?.extmetadata?.Artist?.value ?? "").replace(/<[^>]+>/g, "").trim();
+      const descricaoCrua = (info?.extmetadata?.ImageDescription?.value ?? "").replace(/<[^>]+>/g, "").trim();
+      const titulo = (pagina.title ?? "").replace(/^File:/i, "").replace(/\.(jpe?g|png)$/i, "").replace(/[_-]+/g, " ");
+      candidatos.push({
+        url: urlFoto,
+        credito: `Foto: ${artista || "autor desconhecido"} / Wikimedia Commons`,
+        descricao: descricaoCrua || titulo,
+      });
+    }
+    return candidatos;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Openverse: buscador da Creative Commons que agrega milhões de fotos de
+ * dezenas de fontes (Flickr, museus, arquivos públicos etc.), todas já
+ * catalogadas por licença. `license_type=commercial` filtra SÓ as que
+ * permitem uso comercial — necessário aqui porque o Radar BV é monetizado
+ * com banner, então uma licença "não-comercial" não serve pro portal.
+ */
+async function buscarCandidatosOpenverse(palavraChave: string): Promise<CandidatoImagem[]> {
+  try {
+    const url = `https://api.openverse.org/v1/images/?q=${encodeURIComponent(palavraChave)}&license_type=commercial&page_size=${QTD_CANDIDATAS}`;
+    const resposta = await fetch(url, { signal: AbortSignal.timeout(8_000) });
+    if (!resposta.ok) return [];
+    const json = (await resposta.json()) as OpenverseResultado;
+    return (json.results ?? []).map((foto) => ({
+      url: foto.url,
+      credito: `Foto: ${foto.creator || "autor desconhecido"} / Openverse (${foto.license.toUpperCase()})`,
+      descricao: foto.title || "",
     }));
   } catch {
     return [];
@@ -189,7 +273,8 @@ async function buscarImagemBancoProprio(
  * passando pelo Verificador de Imagem (item novo, 22/11/2026 — ver
  * validarImagemBancoProprio em editorImagens.ts) antes de aceitar, porque é
  * uma foto real e reconhecível; se não achar nenhuma aprovada, busca um
- * PUNHADO de candidatas livres de direitos (Unsplash -> Pixabay -> Pexels,
+ * PUNHADO de candidatas livres de direitos (Unsplash -> Pixabay -> Pexels ->
+ * Wikimedia Commons -> Openverse,
  * parando no primeiro banco que trouxer resultado) e deixa a IA escolher,
  * entre elas, a que combina de verdade com o conteúdo da matéria — não só a
  * primeira que bateu com a palavra-chave solta; se nenhuma das três
@@ -252,7 +337,8 @@ export async function obterImagemParaMateria(
 }
 
 /**
- * Busca candidatas de banco livre (Unsplash -> Pixabay -> Pexels) com UMA
+ * Busca candidatas de banco livre (Unsplash -> Pixabay -> Pexels -> Wikimedia
+ * Commons -> Openverse) com UMA
  * palavra-chave e deixa o Editor de Imagens escolher a melhor. Só devolve
  * resultado quando há candidatas E a escolha foi CONFIÁVEL (a IA realmente
  * achou uma que combina) — devolve null nos outros casos, pra quem chamou
@@ -262,6 +348,8 @@ async function buscarMelhorCandidatoLivre(palavraChave: string, textoParaCasar: 
   let candidatos = await buscarCandidatosUnsplash(palavraChave);
   if (candidatos.length === 0) candidatos = await buscarCandidatosPixabay(palavraChave);
   if (candidatos.length === 0) candidatos = await buscarCandidatosPexels(palavraChave);
+  if (candidatos.length === 0) candidatos = await buscarCandidatosWikimedia(palavraChave);
+  if (candidatos.length === 0) candidatos = await buscarCandidatosOpenverse(palavraChave);
 
   if (candidatos.length === 0) return null;
 
