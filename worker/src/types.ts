@@ -35,6 +35,14 @@ export interface FonteMonitorada {
    * desproporcionalmente o feed do portal, que é primariamente local.
    */
   limite_diario: number | null;
+  /**
+   * Crédito de Fonte Primária (22/11/2026): false = veículo concorrente
+   * (ex.: G1, Folha) — só entra no crédito público da matéria se a IA não
+   * achar uma fonte primária mais específica dentro do próprio texto
+   * (ver MateriaRedigida.fontePrimaria). Fontes oficiais/agências/"busca"
+   * continuam true e são creditadas normalmente, como sempre foram.
+   */
+  creditar_publicamente: boolean;
 }
 
 /** Item bruto extraído de um feed RSS/HTML, antes de qualquer IA */
@@ -46,6 +54,8 @@ export interface ItemBruto {
   conteudoBruto: string; // HTML ou texto bruto da matéria/post
   editoriaPadrao: Editoria | null;
   publicadoEm?: string;
+  /** Herdado de FonteMonitorada.creditar_publicamente — ver comentário lá. */
+  creditarPublicamente: boolean;
 }
 
 /** Saída da Triagem do Gemini — fatos essenciais mastigados, sem redação final */
@@ -65,6 +75,17 @@ export interface MateriaRedigida {
   editoria: Editoria;
   tags: string[];
   urgente: boolean;
+  /**
+   * Crédito de Fonte Primária (22/11/2026): quando os tópicos apurados
+   * citam explicitamente de onde a informação partiu originalmente (um
+   * órgão oficial, ministério, polícia, empresa, nota oficial, etc.), a
+   * IA preenche aqui com esse nome. null/undefined quando os tópicos não
+   * trazem nenhuma atribuição explícita (apuração própria do veículo-fonte,
+   * sem fonte externa citada) — nesse caso o crédito público cai pro nome
+   * da fonte de coleta normalmente, OU fica em branco se essa fonte for um
+   * veículo concorrente (ver FonteMonitorada.creditar_publicamente).
+   */
+  fontePrimaria?: string | null;
 }
 
 export interface ResultadoImagem {

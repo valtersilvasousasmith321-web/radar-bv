@@ -92,6 +92,7 @@ create table if not exists fontes_monitoradas (
   ultimo_erro       text,
   erros_consecutivos smallint not null default 0,          -- isolamento de fontes
   limite_diario     smallint,                             -- teto de notícias/dia desta fonte (null = sem limite)
+  creditar_publicamente boolean not null default true,     -- false = veículo concorrente (G1, Folha etc.): só aparece no crédito público se a IA não achar fonte primária melhor no texto
   criado_em         timestamptz not null default now()
 );
 

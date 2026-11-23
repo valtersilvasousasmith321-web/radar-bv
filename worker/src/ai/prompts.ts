@@ -97,7 +97,7 @@ REGRAS INVIOLÁVEIS (blindagem anti-fake news / anti-alucinação):
 1. Use APENAS os fatos presentes nos tópicos abaixo, extraídos da fonte oficial "${params.fonteNome}". NUNCA invente nomes, datas, números, declarações ou qualquer fato que não esteja nos tópicos.
 2. Jamais atribua falas ou declarações entre aspas que não estejam explicitamente nos tópicos fornecidos.
 3. Linguagem jornalística profissional, clara, imparcial e sem sensacionalismo. Nunca use adjetivos alarmistas não sustentados pelos fatos.
-4. Sempre mantenha o crédito da fonte original — ela será exibida junto da matéria automaticamente, você não precisa escrevê-la no corpo do texto.
+4. Identifique a FONTE PRIMÁRIA real da notícia (preencha "fontePrimaria" no JSON): procure nos tópicos se há uma atribuição explícita a quem originou a informação — um órgão oficial, ministério, secretaria, polícia, tribunal, empresa, entidade, assessoria de imprensa, nota oficial, especialista ou autoridade entrevistada. Exemplos: "Ministério da Saúde", "Polícia Federal", "Secretaria de Estado da Fazenda de Roraima", "nota da empresa X". Se os tópicos trouxerem essa atribuição, preencha "fontePrimaria" com ela (é essa fonte que será exibida publicamente como crédito, não o veículo de onde a notícia foi apurada). Se os tópicos NÃO citarem nenhuma fonte externa — ou seja, forem a apuração/investigação própria de um veículo de imprensa, sem atribuição a terceiros —, preencha "fontePrimaria": null. O crédito do veículo original (quando aplicável) é controlado automaticamente pelo sistema — você nunca escreve o nome de nenhum veículo/portal/fonte no corpo do texto.
 5. Se os tópicos forem insuficientes ou vagos demais para gerar uma matéria coerente, responda apenas: {"insuficiente": true}.
 6. Tags para cruzamento de anúncios: inclua em "tags" toda tag padronizada abaixo que genuinamente se aplique ao conteúdo da matéria (nunca force uma tag que não tenha relação real com o texto) — elas alimentam o Motor de Publicidade Inteligente que escolhe qual banner exibir:
    ${TAGS_CRUZAMENTO_ANUNCIOS.join(", ")}
@@ -109,7 +109,8 @@ REGRAS INVIOLÁVEIS (blindagem anti-fake news / anti-alucinação):
   "conteudo": "string (7 a 11 parágrafos em texto corrido, parágrafos separados por \\n\\n, no mínimo umas 400 palavras no total quando os tópicos apurados derem material pra isso — desenvolva TODOS os tópicos apurados com profundidade, cada um ganhando espaço de verdade no texto, incluindo contexto, antecedentes e consequências quando houver nos tópicos; nunca encha linguiça repetindo a mesma informação com outras palavras só pra alongar — se os tópicos apurados forem genuinamente poucos, a matéria pode ficar mais curta mesmo, com qualidade sempre na frente de tamanho)",
   "editoria": "${EDITORIAS_VALIDAS.join("|")}",
   "tags": ["string", "..."],
-  "urgente": boolean
+  "urgente": boolean,
+  "fontePrimaria": "string ou null (ver regra 4)"
 }
 
 EDITORIA SUGERIDA PELA TRIAGEM: ${params.editoriaSugerida}
@@ -150,18 +151,20 @@ REGRAS INVIOLÁVEIS (blindagem anti-fake news / anti-alucinação):
 2. Jamais atribua falas ou declarações entre aspas que não estejam explicitamente nos tópicos fornecidos.
 3. Linguagem jornalística profissional, clara, imparcial e sem sensacionalismo. Nunca use adjetivos alarmistas não sustentados pelos fatos.
 4. Não cite o nome de cada fonte dentro do texto corrido — o crédito de todas elas aparece automaticamente junto da matéria, listando os nomes.
-5. Se os tópicos combinados forem insuficientes ou vagos demais para gerar uma matéria coerente, responda apenas: {"insuficiente": true}.
-6. Tags para cruzamento de anúncios: inclua em "tags" toda tag padronizada abaixo que genuinamente se aplique ao conteúdo da matéria (nunca force uma tag que não tenha relação real com o texto) — elas alimentam o Motor de Publicidade Inteligente que escolhe qual banner exibir:
+5. Identifique a FONTE PRIMÁRIA real da notícia (preencha "fontePrimaria" no JSON): procure, em QUALQUER das fontes abaixo, se há uma atribuição explícita a quem originou a informação — um órgão oficial, ministério, secretaria, polícia, tribunal, empresa, entidade, assessoria de imprensa, nota oficial, especialista ou autoridade entrevistada. Se achar, preencha "fontePrimaria" com ela (é essa fonte que será exibida publicamente como crédito, em vez da lista de veículos apurados). Se nenhuma das fontes citar uma atribuição externa (todas forem apuração/investigação própria dos veículos, sem fonte citada), preencha "fontePrimaria": null.
+6. Se os tópicos combinados forem insuficientes ou vagos demais para gerar uma matéria coerente, responda apenas: {"insuficiente": true}.
+7. Tags para cruzamento de anúncios: inclua em "tags" toda tag padronizada abaixo que genuinamente se aplique ao conteúdo da matéria (nunca force uma tag que não tenha relação real com o texto) — elas alimentam o Motor de Publicidade Inteligente que escolhe qual banner exibir:
    ${TAGS_CRUZAMENTO_ANUNCIOS.join(", ")}
    Além dessas, pode incluir outras tags livres relevantes (nomes de lugares, assuntos específicos).
-7. Responda SOMENTE com um JSON válido, sem comentários, sem markdown, no formato exato:
+8. Responda SOMENTE com um JSON válido, sem comentários, sem markdown, no formato exato:
 {
   "titulo": "string (máx. 90 caracteres, sem clickbait)",
   "subtitulo": "string (máx. 160 caracteres)",
   "conteudo": "string (7 a 11 parágrafos em texto corrido, parágrafos separados por \\n\\n — desenvolva TODOS os tópicos apurados de TODAS as fontes com profundidade, terminando com o parágrafo de contexto exclusivo do Radar BV quando aplicável)",
   "editoria": "${EDITORIAS_VALIDAS.join("|")}",
   "tags": ["string", "..."],
-  "urgente": boolean
+  "urgente": boolean,
+  "fontePrimaria": "string ou null (ver regra 5)"
 }
 
 EDITORIA SUGERIDA PELA TRIAGEM: ${params.editoriaSugerida}

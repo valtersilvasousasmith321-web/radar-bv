@@ -129,6 +129,7 @@ async function coletarRss(fonte: FonteMonitorada): Promise<ItemBruto[]> {
     conteudoBruto: item["content:encoded"] ?? item.content ?? "",
     editoriaPadrao: fonte.editoria_padrao,
     publicadoEm: item.pubDate,
+    creditarPublicamente: fonte.creditar_publicamente,
   }));
 }
 
@@ -227,6 +228,7 @@ async function coletarBusca(fonte: FonteMonitorada): Promise<ItemBruto[]> {
         tituloOriginal: tituloCandidato || fonte.nome,
         conteudoBruto: extrairTextoPrincipal(htmlArtigo, url),
         editoriaPadrao: fonte.editoria_padrao,
+        creditarPublicamente: fonte.creditar_publicamente,
       };
     })
   );
@@ -265,6 +267,7 @@ async function coletarHtml(fonte: FonteMonitorada): Promise<ItemBruto[]> {
         tituloOriginal: fonte.nome,
         conteudoBruto: extrairTextoPrincipal(html, fonte.url_base),
         editoriaPadrao: fonte.editoria_padrao,
+        creditarPublicamente: fonte.creditar_publicamente,
       },
     ];
   }
@@ -284,6 +287,7 @@ async function coletarHtml(fonte: FonteMonitorada): Promise<ItemBruto[]> {
         tituloOriginal: tituloCandidato || fonte.nome,
         conteudoBruto: extrairTextoPrincipal(htmlArtigo, url),
         editoriaPadrao: fonte.editoria_padrao,
+        creditarPublicamente: fonte.creditar_publicamente,
       };
     })
   );

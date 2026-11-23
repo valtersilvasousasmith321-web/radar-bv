@@ -182,7 +182,7 @@ export async function agendarPublicacao(resultado: ResultadoPipeline, fonteId: s
       infografico,
       fonte_id: fonteId,
       fonte_url_original: resultado.fonteUrl,
-      fonte_credito: resultado.fonteNome,
+      fonte_credito: resultado.fonteCreditoPublico,
       fontes_cruzadas: resultado.fontesCruzadas?.map((f) => ({ nome: f.nome, url: f.url })) ?? null,
       origem_ia: origemIA,
       status: aprovadoParaPublicar ? "agendado" : "rascunho",

@@ -26,12 +26,51 @@ export interface ResultadoPipeline {
   fonteNome: string;
   topicosApurados: string[];
   /**
+   * Crédito de Fonte Primária (22/11/2026): o nome que efetivamente vai pro
+   * campo público "fonte_credito" da matéria. Nunca é simplesmente o nome
+   * do veículo de coleta quando esse veículo é um concorrente comercial
+   * (ver FonteMonitorada.creditar_publicamente) — nesses casos, só aparece
+   * aqui a fonte primária que a própria IA identificou no texto (um órgão
+   * oficial, por exemplo), ou null quando nenhuma foi identificável (nesse
+   * caso a matéria simplesmente não exibe nenhuma linha de crédito).
+   */
+  fonteCreditoPublico: string | null;
+  /**
    * Curadoria Multi-Fonte (22/11/2026): presente só quando a matéria veio de
    * processarItemMultiFonte. Lista TODAS as fontes usadas (mesmo quando só
    * 1 sobreviveu à triagem) — queue.ts usa isso pra fechar a Trava de
    * Silêncio de cada URL do grupo e gravar o registro completo no banco.
    */
   fontesCruzadas?: FonteCruzada[];
+}
+
+/** "X", "X e Y" ou "X, Y e Z" — junta nomes de fonte pro crédito público multi-fonte. */
+function juntarNomes(nomes: string[]): string | null {
+  if (nomes.length === 0) return null;
+  if (nomes.length === 1) return nomes[0];
+  if (nomes.length === 2) return `${nomes[0]} e ${nomes[1]}`;
+  return `${nomes.slice(0, -1).join(", ")} e ${nomes[nomes.length - 1]}`;
+}
+
+/**
+ * Crédito de Fonte Primária (22/11/2026 — a pedido do Valter: "não pode
+ * parecer que a gente copiou o G1/Folha, tem que buscar a fonte principal
+ * do jeito que eles fazem"). Prioridade:
+ *   1. A fonte primária que a própria IA identificou dentro do texto
+ *      apurado (ex.: "Ministério da Saúde") — sempre a mais específica e
+ *      honesta, usada independente de qual veículo foi coletado.
+ *   2. Na ausência dela, os nomes das fontes de coleta que PODEM aparecer
+ *      publicamente (creditarPublicamente === true) — comportamento igual
+ *      ao de sempre para fontes oficiais, agências e "busca".
+ *   3. Se nada sobrar (nenhuma fonte primária achada E a(s) fonte(s) de
+ *      coleta são veículo(s) concorrente(s) marcados como não-creditáveis),
+ *      null — a matéria sai sem nenhuma linha de crédito, em vez de citar
+ *      um concorrente.
+ */
+function calcularCreditoPublico(fontePrimaria: string | null | undefined, fontes: Array<{ nome: string; creditarPublicamente: boolean }>): string | null {
+  const primariaLimpa = fontePrimaria?.trim();
+  if (primariaLimpa) return primariaLimpa;
+  return juntarNomes(fontes.filter((f) => f.creditarPublicamente).map((f) => f.nome));
 }
 
 /** Triagem com Fallback em cascata (IA local -> Gemini -> Claude -> Groq -> OpenRouter -> Mistral -> Cohere) — compartilhada entre o caminho de fonte única e o multi-fonte. */
@@ -233,6 +272,9 @@ export async function processarItem(item: ItemBruto): Promise<ResultadoPipeline 
     fonteUrl: item.url,
     fonteNome: item.fonteNome,
     topicosApurados: resumo.topicos,
+    fonteCreditoPublico: calcularCreditoPublico(resultado.materia.fontePrimaria, [
+      { nome: item.fonteNome, creditarPublicamente: item.creditarPublicamente },
+    ]),
   };
 }
 
@@ -282,6 +324,9 @@ export async function processarItemMultiFonte(
       fonteUrl: item.url,
       fonteNome: item.fonteNome,
       topicosApurados: resumo.topicos,
+      fonteCreditoPublico: calcularCreditoPublico(resultado.materia.fontePrimaria, [
+        { nome: item.fonteNome, creditarPublicamente: item.creditarPublicamente },
+      ]),
       fontesCruzadas: [{ fonteId: item.fonteId, url: item.url, nome: item.fonteNome, hash: item.hash }],
     };
   }
@@ -301,8 +346,7 @@ export async function processarItemMultiFonte(
 
   const principal = apuracoes[0];
   const nomes = apuracoes.map((a) => a.item.fonteNome);
-  const fonteCreditoFormatado =
-    nomes.length === 2 ? `${nomes[0]} e ${nomes[1]}` : `${nomes.slice(0, -1).join(", ")} e ${nomes[nomes.length - 1]}`;
+  const fonteCreditoFormatado = juntarNomes(nomes) ?? nomes[0];
 
   await log("info", "pipeline", `Matéria multi-fonte redigida com sucesso via ${resultado.origemIA}`, { fontes: nomes, titulo: resultado.materia.titulo });
 
@@ -313,6 +357,10 @@ export async function processarItemMultiFonte(
     fonteUrl: principal.item.url,
     fonteNome: fonteCreditoFormatado,
     topicosApurados: apuracoes.flatMap((a) => a.resumo.topicos),
+    fonteCreditoPublico: calcularCreditoPublico(
+      resultado.materia.fontePrimaria,
+      apuracoes.map((a) => ({ nome: a.item.fonteNome, creditarPublicamente: a.item.creditarPublicamente }))
+    ),
     fontesCruzadas: apuracoes.map((a) => ({ fonteId: a.item.fonteId, url: a.item.url, nome: a.item.fonteNome, hash: a.item.hash })),
   };
 }
