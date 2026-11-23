@@ -1,7 +1,7 @@
 import Groq from "groq-sdk";
 import { config } from "../config.js";
 import { log } from "../logger.js";
-import { promptRedacaoFallback, promptTriagemGemini } from "./prompts.js";
+import { promptRedacaoFallback, promptRedacaoMultiFonte, promptAgrupador, promptTriagemGemini } from "./prompts.js";
 import { pareceErroDeCota, marcarIndisponivel } from "./quotaTracker.js";
 import type { Editoria, ItemBruto, MateriaRedigida, ResumoGemini } from "../types.js";
 
@@ -81,13 +81,28 @@ export async function redigirComGroqFallback(params: {
   fonteUrl: string;
   editoriaSugerida: Editoria;
 }): Promise<MateriaRedigida | null> {
+  return chamarGroqParaRedacao(promptRedacaoFallback(params), params.fonteNome);
+}
+
+/**
+ * Curadoria Multi-Fonte (item novo, 22/11/2026) — último elo da cascata de
+ * redação, mesmo papel do redigirComGroqFallback acima, cruzando os
+ * tópicos de 2+ fontes já identificadas como o mesmo fato pelo Agrupador.
+ */
+export async function redigirMultiFonteComGroqFallback(params: {
+  fontes: Array<{ nome: string; topicos: string[] }>;
+  editoriaSugerida: Editoria;
+}): Promise<MateriaRedigida | null> {
+  return chamarGroqParaRedacao(promptRedacaoMultiFonte(params), params.fontes.map((f) => f.nome).join(" + "));
+}
+
+async function chamarGroqParaRedacao(prompt: string, rotuloLog: string): Promise<MateriaRedigida | null> {
   if (!groq) {
     await log("warning", "groq", "GROQ_API_KEY não configurada — fallback final indisponível");
     return null;
   }
 
   try {
-    const prompt = promptRedacaoFallback(params);
     const resposta = await groq.chat.completions.create({
       model: MODELO_FALLBACK,
       messages: [{ role: "user", content: prompt }],
@@ -100,7 +115,7 @@ export async function redigirComGroqFallback(params: {
 
     const texto = resposta.choices[0]?.message?.content ?? "";
     if (!texto.trim()) {
-      await log("critico", "groq", "Último fallback (Groq) devolveu content vazio mesmo com reasoning_effort low", { fonte: params.fonteNome });
+      await log("critico", "groq", "Último fallback (Groq) devolveu content vazio mesmo com reasoning_effort low", { fonte: rotuloLog });
       return null;
     }
     const json = extrairJson<any>(texto);
@@ -111,6 +126,37 @@ export async function redigirComGroqFallback(params: {
     await log("critico", "groq", "Falha no último fallback (Groq/Llama) — matéria não pode ser redigida", {
       erro: String(err?.message ?? err),
     });
+    return null;
+  }
+}
+
+/**
+ * Agrupador (item novo, 22/11/2026) — último elo da cascata de agrupamento,
+ * usado só se Gemini e Claude já falharam/estiverem sem fôlego nesse ciclo.
+ */
+export async function agruparComGroqFallback(
+  itens: Array<{ indice: number; fonteNome: string; titulo: string; trecho: string }>
+): Promise<{ grupos: number[][] } | null> {
+  if (!groq) return null;
+
+  try {
+    const prompt = promptAgrupador(itens);
+    const resposta = await groq.chat.completions.create({
+      model: MODELO_FALLBACK,
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.2,
+      max_tokens: 1200,
+      reasoning_effort: "low",
+    } as any);
+
+    const texto = resposta.choices[0]?.message?.content ?? "";
+    if (!texto.trim()) return null;
+    const json = extrairJson<{ grupos: number[][] }>(texto);
+    if (!json.grupos) return null;
+    return json;
+  } catch (err: any) {
+    if (pareceErroDeCota(err)) await marcarIndisponivel("groq", String(err?.message ?? err));
+    await log("error", "groq", "Falha no agrupamento de pauta (Groq)", { erro: String(err?.message ?? err) });
     return null;
   }
 }

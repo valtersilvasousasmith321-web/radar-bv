@@ -1,4 +1,4 @@
-import type { CorrecaoNota, Editoria, OrigemIA } from "./types";
+import type { CorrecaoNota, Editoria, FonteCruzada, OrigemIA } from "./types";
 
 export type StatusNoticia = "rascunho" | "agendado" | "publicado" | "erro" | "removido";
 
@@ -20,6 +20,7 @@ export interface Noticia {
   fonte_id: string | null;
   fonte_url_original: string;
   fonte_credito: string | null;
+  fontes_cruzadas: FonteCruzada[] | null;
   origem_ia: OrigemIA;
   status: StatusNoticia;
   destaque: boolean;

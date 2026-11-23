@@ -118,7 +118,8 @@ create table if not exists noticias (
   correcoes           jsonb not null default '[]', -- item 21: histórico de notas de correção pública [{data, texto}]
   fonte_id            uuid references fontes_monitoradas(id) on delete set null,
   fonte_url_original  text not null,
-  fonte_credito       text,                        -- nome exibido da fonte original
+  fonte_credito       text,                        -- nome exibido da fonte original (ou "X e Y" quando curadoria multi-fonte)
+  fontes_cruzadas     jsonb,                       -- Curadoria Multi-Fonte (22/11/2026): [{nome, url}] de TODAS as fontes cruzadas, ou null quando a matéria veio de 1 fonte só
   origem_ia           origem_ia not null default 'claude',
   status              status_noticia not null default 'rascunho',
   destaque            boolean not null default false,

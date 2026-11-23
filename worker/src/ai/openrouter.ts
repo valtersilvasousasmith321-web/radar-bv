@@ -1,6 +1,6 @@
 import { config } from "../config.js";
 import { log } from "../logger.js";
-import { promptRedacaoFallback, promptTriagemGemini } from "./prompts.js";
+import { promptRedacaoFallback, promptRedacaoMultiFonte, promptAgrupador, promptTriagemGemini } from "./prompts.js";
 import { pareceErroDeCota, marcarIndisponivel } from "./quotaTracker.js";
 import type { Editoria, ItemBruto, MateriaRedigida, ResumoGemini } from "../types.js";
 
@@ -85,10 +85,25 @@ export async function redigirComOpenRouterFallback(params: {
   fonteUrl: string;
   editoriaSugerida: Editoria;
 }): Promise<MateriaRedigida | null> {
+  return chamarOpenRouterParaRedacao(promptRedacaoFallback(params));
+}
+
+/**
+ * Curadoria Multi-Fonte (item novo, 22/11/2026) — último elo da cascata de
+ * redação, cruzando os tópicos de 2+ fontes já identificadas como o mesmo
+ * fato pelo Agrupador.
+ */
+export async function redigirMultiFonteComOpenRouterFallback(params: {
+  fontes: Array<{ nome: string; topicos: string[] }>;
+  editoriaSugerida: Editoria;
+}): Promise<MateriaRedigida | null> {
+  return chamarOpenRouterParaRedacao(promptRedacaoMultiFonte(params));
+}
+
+async function chamarOpenRouterParaRedacao(prompt: string): Promise<MateriaRedigida | null> {
   if (!config.ia.openrouterApiKey) return null;
 
   try {
-    const prompt = promptRedacaoFallback(params);
     const texto = await chamarOpenRouter(prompt);
     if (!texto.trim()) return null;
 
@@ -98,6 +113,28 @@ export async function redigirComOpenRouterFallback(params: {
   } catch (err: any) {
     if (pareceErroDeCota(err)) await marcarIndisponivel("openrouter", String(err?.message ?? err));
     await log("error", "openrouter", "Falha no fallback de redação (OpenRouter)", { erro: String(err?.message ?? err) });
+    return null;
+  }
+}
+
+/**
+ * Agrupador (item novo, 22/11/2026) — último elo da cascata de agrupamento.
+ */
+export async function agruparComOpenRouterFallback(
+  itens: Array<{ indice: number; fonteNome: string; titulo: string; trecho: string }>
+): Promise<{ grupos: number[][] } | null> {
+  if (!config.ia.openrouterApiKey) return null;
+
+  try {
+    const prompt = promptAgrupador(itens);
+    const texto = await chamarOpenRouter(prompt);
+    if (!texto.trim()) return null;
+    const json = extrairJson<{ grupos: number[][] }>(texto);
+    if (!json.grupos) return null;
+    return json;
+  } catch (err: any) {
+    if (pareceErroDeCota(err)) await marcarIndisponivel("openrouter", String(err?.message ?? err));
+    await log("error", "openrouter", "Falha no agrupamento de pauta (OpenRouter)", { erro: String(err?.message ?? err) });
     return null;
   }
 }

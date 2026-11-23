@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { config } from "../config.js";
 import { log } from "../logger.js";
-import { promptRedacaoChefe, promptTriagemGemini } from "./prompts.js";
+import { promptRedacaoChefe, promptRedacaoMultiFonte, promptAgrupador, promptTriagemGemini } from "./prompts.js";
 import { pareceErroDeCota, marcarIndisponivel } from "./quotaTracker.js";
 import type { Editoria, ItemBruto, MateriaRedigida, ResumoGemini } from "../types.js";
 
@@ -81,8 +81,22 @@ export async function redigirComClaude(params: {
   fonteUrl: string;
   editoriaSugerida: Editoria;
 }): Promise<MateriaRedigida | null> {
-  const prompt = promptRedacaoChefe(params);
+  return chamarClaudeParaRedacao(promptRedacaoChefe(params), params.fonteNome);
+}
 
+/**
+ * Curadoria Multi-Fonte (item novo, 22/11/2026): mesma cascata/modelo da
+ * redação normal, só muda o prompt — cruza os tópicos de 2+ fontes que o
+ * Agrupador identificou como o mesmo fato (ver promptRedacaoMultiFonte).
+ */
+export async function redigirMultiFonteComClaude(params: {
+  fontes: Array<{ nome: string; topicos: string[] }>;
+  editoriaSugerida: Editoria;
+}): Promise<MateriaRedigida | null> {
+  return chamarClaudeParaRedacao(promptRedacaoMultiFonte(params), params.fontes.map((f) => f.nome).join(" + "));
+}
+
+async function chamarClaudeParaRedacao(prompt: string, rotuloLog: string): Promise<MateriaRedigida | null> {
   const resposta = await anthropic.messages.create({
     model: "claude-haiku-5-5",
     max_tokens: 2000,
@@ -99,8 +113,36 @@ export async function redigirComClaude(params: {
   const json = extrairJson<any>(texto);
 
   if (json.insuficiente) {
-    await log("info", "claude", "Tópicos insuficientes para redigir matéria", { fonte: params.fonteNome });
+    await log("info", "claude", "Tópicos insuficientes para redigir matéria", { fonte: rotuloLog });
     return null;
   }
   return json as MateriaRedigida;
+}
+
+/**
+ * Agrupador (item novo, 22/11/2026) — fallback via Claude, usado quando o
+ * Gemini já falhou/está sem fôlego nesse ciclo.
+ */
+export async function agruparComClaude(
+  itens: Array<{ indice: number; fonteNome: string; titulo: string; trecho: string }>
+): Promise<{ grupos: number[][] } | null> {
+  try {
+    const prompt = promptAgrupador(itens);
+    const resposta = await anthropic.messages.create({
+      model: "claude-haiku-5-5",
+      max_tokens: 1200,
+      output_config: { effort: "low" },
+      messages: [{ role: "user", content: prompt }],
+    } as any);
+
+    const bloco = resposta.content.find((b) => b.type === "text");
+    const texto = bloco && bloco.type === "text" ? bloco.text : "";
+    const json = extrairJson<{ grupos: number[][] }>(texto);
+    if (!json.grupos) return null;
+    return json;
+  } catch (err: any) {
+    if (pareceErroDeCota(err)) await marcarIndisponivel("claude", String(err?.message ?? err));
+    await log("error", "claude", "Falha no agrupamento de pauta (fallback Claude)", { erro: String(err?.message ?? err) });
+    return null;
+  }
 }

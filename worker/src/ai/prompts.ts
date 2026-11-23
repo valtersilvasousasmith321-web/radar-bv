@@ -122,6 +122,81 @@ export function promptRedacaoFallback(params: { topicos: string[]; fonteNome: st
 }
 
 /**
+ * Redator-Chefe em modo CURADORIA MULTI-FONTE (proposta de Valter de
+ * 22/11/2026, parte 2): usado quando o Agrupador (agrupador.ts) detecta que
+ * 2 ou mais fontes diferentes, no MESMO ciclo de coleta, estão cobrindo o
+ * MESMO fato — em vez de descartar as repetidas (que era o comportamento
+ * antigo de "assuntoJaCoberto"), a Redação-Chefe agora cruza os tópicos já
+ * apurados de cada fonte (pela MESMA triagem de sempre, uma vez por fonte)
+ * numa única matéria mais completa que nenhuma fonte sozinha, terminando
+ * com um parágrafo de contexto exclusivo do Radar BV.
+ */
+export function promptRedacaoMultiFonte(params: {
+  fontes: Array<{ nome: string; topicos: string[] }>;
+  editoriaSugerida: string;
+}): string {
+  return `Você é o Redator-Chefe do portal de notícias Radar BV, de Boa Vista/Roraima. Você escreve a versão final que vai ao ar.
+
+Este assunto foi apurado a partir de MAIS DE UMA fonte, cobrindo o mesmo fato — abaixo estão os tópicos extraídos de cada fonte, SEPARADAMENTE. Seu trabalho de Curadoria Multi-Fonte tem 3 passos:
+1. Cruze os fatos: o que é confirmado por mais de uma fonte pode ser afirmado com mais segurança; o que aparece em só uma fonte ainda deve ser usado, mas sem inflar a certeza além do que aquela fonte garante.
+2. Escreva a matéria incorporando o conjunto apurado de todas as fontes, sem repetir a mesma informação várias vezes e sem contradizer uma fonte com a outra silenciosamente — se duas fontes divergirem num detalhe (ex.: um número, uma data), diga isso explicitamente no texto em vez de escolher um lado sem avisar o leitor.
+3. Ao final do corpo da matéria, inclua um último parágrafo começando com "Com informações apuradas pelo Radar BV:" trazendo um contexto, antecedente ou implicação prática pros moradores de Boa Vista/Roraima que NÃO estava explícito em nenhuma das fontes individualmente — mas que seja uma conclusão direta e segura a partir dos próprios tópicos apurados (NUNCA um fato novo inventado; é uma conexão/explicação sobre os fatos já apurados). Se genuinamente não houver nenhuma conexão segura a fazer, pode encerrar sem esse parágrafo — nunca force um parágrafo vazio só pra cumprir tabela.
+
+REGRAS INVIOLÁVEIS (blindagem anti-fake news / anti-alucinação):
+1. Use APENAS os fatos presentes nos tópicos de QUALQUER uma das fontes abaixo. NUNCA invente nomes, datas, números, declarações ou qualquer fato que não esteja nos tópicos.
+2. Jamais atribua falas ou declarações entre aspas que não estejam explicitamente nos tópicos fornecidos.
+3. Linguagem jornalística profissional, clara, imparcial e sem sensacionalismo. Nunca use adjetivos alarmistas não sustentados pelos fatos.
+4. Não cite o nome de cada fonte dentro do texto corrido — o crédito de todas elas aparece automaticamente junto da matéria, listando os nomes.
+5. Se os tópicos combinados forem insuficientes ou vagos demais para gerar uma matéria coerente, responda apenas: {"insuficiente": true}.
+6. Tags para cruzamento de anúncios: inclua em "tags" toda tag padronizada abaixo que genuinamente se aplique ao conteúdo da matéria (nunca force uma tag que não tenha relação real com o texto) — elas alimentam o Motor de Publicidade Inteligente que escolhe qual banner exibir:
+   ${TAGS_CRUZAMENTO_ANUNCIOS.join(", ")}
+   Além dessas, pode incluir outras tags livres relevantes (nomes de lugares, assuntos específicos).
+7. Responda SOMENTE com um JSON válido, sem comentários, sem markdown, no formato exato:
+{
+  "titulo": "string (máx. 90 caracteres, sem clickbait)",
+  "subtitulo": "string (máx. 160 caracteres)",
+  "conteudo": "string (5 a 9 parágrafos em texto corrido, parágrafos separados por \\n\\n — desenvolva TODOS os tópicos apurados com profundidade, terminando com o parágrafo de contexto exclusivo do Radar BV quando aplicável)",
+  "editoria": "${EDITORIAS_VALIDAS.join("|")}",
+  "tags": ["string", "..."],
+  "urgente": boolean
+}
+
+EDITORIA SUGERIDA PELA TRIAGEM: ${params.editoriaSugerida}
+
+FONTES APURADAS SEPARADAMENTE (${params.fontes.length} no total — todas cobrindo o MESMO fato):
+${params.fontes.map((f, i) => `--- Fonte ${i + 1}: ${f.nome} ---\n${f.topicos.map((t, j) => `${j + 1}. ${t}`).join("\n")}`).join("\n\n")}`;
+}
+
+/**
+ * Agrupador (proposta de 22/11/2026, parte 2): roda UMA VEZ por ciclo de
+ * coleta, antes da triagem item-a-item, pra detectar quando 2+ itens
+ * inéditos coletados no MESMO pulso — de fontes diferentes — são, na
+ * prática, o MESMO fato noticiado (ex.: um decreto do governo saindo tanto
+ * no feed da Prefeitura quanto numa busca de "Política"). Só assim, o
+ * sistema para de simplesmente descartar a repetida e passa a cruzá-las
+ * numa única matéria mais completa (ver promptRedacaoMultiFonte).
+ *
+ * Deliberadamente conservador: juntar dois itens que NÃO são o mesmo fato
+ * misturaria fatos de assuntos diferentes numa só matéria (risco maior que
+ * simplesmente publicar as duas separadas) — por isso a regra 2 manda errar
+ * para o lado de SEPARAR sempre que houver qualquer dúvida.
+ */
+export function promptAgrupador(itens: Array<{ indice: number; fonteNome: string; titulo: string; trecho: string }>): string {
+  return `Você é o Agrupador de Pauta do portal de notícias Radar BV. Você recebe uma lista de itens coletados no MESMO ciclo, de fontes possivelmente diferentes, e decide quais deles descrevem o MESMO fato/evento real (não apenas o mesmo tema geral).
+
+REGRAS:
+1. Só agrupe itens no MESMO grupo se eles claramente descrevem o MESMO evento/fato específico (ex.: o mesmo acidente, a mesma decisão, o mesmo anúncio, a mesma partida) — nunca apenas por serem do mesmo assunto geral (ex.: "segurança pública" ou "saúde" não bastam; precisa ser o mesmo fato concreto).
+2. Na dúvida, NÃO agrupe — deixe cada item no seu próprio grupo sozinho. É sempre mais seguro tratar dois itens parecidos como separados do que juntar dois fatos diferentes por engano.
+3. Cada item da lista deve aparecer em exatamente UM grupo (sozinho ou com outros).
+4. Responda SOMENTE com um JSON válido, sem comentários, sem markdown, no formato exato:
+{"grupos": [[0, 2], [1], [3, 4]]}
+(cada número é o índice do item, listado abaixo; a lista acima é só um exemplo de formato)
+
+ITENS DESTE CICLO:
+${itens.map((it) => `${it.indice}. [${it.fonteNome}] "${it.titulo}" — ${it.trecho.slice(0, 300)}`).join("\n")}`;
+}
+
+/**
  * Pesquisador de Bairro via dica de morador (item 3 do plano, frente B).
  * Diferente da Redação-Chefe normal: aqui a "fonte" é um relato de cidadão
  * NÃO verificado por ninguém, recebido por WhatsApp — pode ser impreciso,

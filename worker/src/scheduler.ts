@@ -1,7 +1,8 @@
 import cron from "node-cron";
 import { log } from "./logger.js";
 import { executarCicloDeColeta } from "./collector.js";
-import { processarItem } from "./ai/pipeline.js";
+import { processarItem, processarItemMultiFonte } from "./ai/pipeline.js";
+import { agruparItensPorAssunto } from "./ai/agrupador.js";
 import { agendarPublicacao, publicarNoticiasAgendadas } from "./queue.js";
 import { executarResumoDiario } from "./resumoDiario.js";
 import { processarDicasPendentes } from "./dicas.js";
@@ -35,19 +36,37 @@ export async function executarPulsoJornalistico(origem: string): Promise<void> {
       return;
     }
 
-    // Itens processados em série (não em paralelo) para não estourar rate
+    // Agrupador de Pauta (Curadoria Multi-Fonte — item novo, 22/11/2026):
+    // antes de processar item a item, verifica se 2+ itens inéditos deste
+    // MESMO ciclo (de fontes diferentes) são, na prática, o mesmo fato —
+    // nesse caso, cruza os tópicos de todas numa única matéria mais
+    // completa em vez de redigir cada um separadamente ou descartar as
+    // repetidas (ver worker/src/ai/agrupador.ts). Itens que não casam com
+    // nenhum outro seguem no caminho normal de sempre, sem custo extra.
+    const grupos = await agruparItensPorAssunto(itensInéditos);
+
+    // Grupos processados em série (não em paralelo) para não estourar rate
     // limit das APIs de IA gratuitas/baratas.
-    for (const item of itensInéditos) {
+    for (const grupo of grupos) {
       try {
-        const resultado = await processarItem(item);
-        if (resultado) {
-          await agendarPublicacao(resultado, item.fonteId, item.hash);
+        if (grupo.length === 1) {
+          const item = grupo[0];
+          const resultado = await processarItem(item);
+          if (resultado) {
+            await agendarPublicacao(resultado, item.fonteId, item.hash);
+          }
+        } else {
+          const resultado = await processarItemMultiFonte(grupo);
+          if (resultado && resultado.fontesCruzadas && resultado.fontesCruzadas.length > 0) {
+            const principal = resultado.fontesCruzadas[0];
+            await agendarPublicacao(resultado, principal.fonteId, principal.hash);
+          }
         }
       } catch (err: any) {
-        // Isolamento também no nível do item: um erro inesperado em 1 item
-        // não interrompe o processamento dos demais itens do ciclo.
-        await log("error", "scheduler", "Erro inesperado ao processar item — pulando para o próximo", {
-          url: item.url,
+        // Isolamento também no nível do grupo: um erro inesperado em 1 item
+        // (ou grupo) não interrompe o processamento dos demais do ciclo.
+        await log("error", "scheduler", "Erro inesperado ao processar item/grupo — pulando para o próximo", {
+          urls: grupo.map((item) => item.url),
           erro: String(err?.message ?? err),
         });
       }

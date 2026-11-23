@@ -35,6 +35,12 @@ export interface CorrecaoNota {
   texto: string;
 }
 
+/** Curadoria Multi-Fonte (22/11/2026): uma das fontes cruzadas numa matéria. */
+export interface FonteCruzada {
+  nome: string;
+  url: string;
+}
+
 export interface Noticia {
   id: string;
   titulo: string;
@@ -50,6 +56,7 @@ export interface Noticia {
   correcoes: CorrecaoNota[];
   fonte_url_original: string;
   fonte_credito: string | null;
+  fontes_cruzadas?: FonteCruzada[] | null;
   origem_ia: OrigemIA;
   destaque: boolean;
   urgente: boolean;

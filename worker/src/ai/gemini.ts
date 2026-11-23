@@ -1,7 +1,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { config } from "../config.js";
 import { log } from "../logger.js";
-import { promptTriagemGemini, promptRedacaoFallback } from "./prompts.js";
+import { promptTriagemGemini, promptRedacaoFallback, promptRedacaoMultiFonte, promptAgrupador } from "./prompts.js";
 import { pareceErroDeCota, marcarIndisponivel } from "./quotaTracker.js";
 import type { Editoria, ItemBruto, MateriaRedigida, ResumoGemini } from "../types.js";
 
@@ -64,8 +64,23 @@ export async function redigirComGeminiFallback(params: {
   fonteUrl: string;
   editoriaSugerida: Editoria;
 }): Promise<MateriaRedigida | null> {
+  return chamarGeminiParaRedacao(promptRedacaoFallback(params));
+}
+
+/**
+ * Curadoria Multi-Fonte (item novo, 22/11/2026) — fallback Gemini, mesmo
+ * papel do redigirComGeminiFallback acima, só que cruzando os tópicos de
+ * 2+ fontes já identificadas como o mesmo fato pelo Agrupador.
+ */
+export async function redigirMultiFonteComGeminiFallback(params: {
+  fontes: Array<{ nome: string; topicos: string[] }>;
+  editoriaSugerida: Editoria;
+}): Promise<MateriaRedigida | null> {
+  return chamarGeminiParaRedacao(promptRedacaoMultiFonte(params));
+}
+
+async function chamarGeminiParaRedacao(prompt: string): Promise<MateriaRedigida | null> {
   try {
-    const prompt = promptRedacaoFallback(params);
     const resultado = await modeloFlash.generateContent(prompt);
     const texto = resultado.response.text();
     const json = extrairJson<any>(texto);
@@ -75,6 +90,28 @@ export async function redigirComGeminiFallback(params: {
   } catch (err: any) {
     if (pareceErroDeCota(err)) await marcarIndisponivel("gemini", String(err?.message ?? err));
     await log("error", "gemini", "Falha no fallback de redação do Gemini", { erro: String(err?.message ?? err) });
+    return null;
+  }
+}
+
+/**
+ * Agrupador (item novo, 22/11/2026): roda 1x por ciclo (não por item), antes
+ * da triagem — identifica quais itens inéditos coletados no mesmo pulso são
+ * o MESMO fato contado por fontes diferentes. Ver promptAgrupador.
+ */
+export async function agruparComGemini(
+  itens: Array<{ indice: number; fonteNome: string; titulo: string; trecho: string }>
+): Promise<{ grupos: number[][] } | null> {
+  try {
+    const prompt = promptAgrupador(itens);
+    const resultado = await modeloFlash.generateContent(prompt);
+    const texto = resultado.response.text();
+    const json = extrairJson<{ grupos: number[][] }>(texto);
+    if (!json.grupos) return null;
+    return json;
+  } catch (err: any) {
+    if (pareceErroDeCota(err)) await marcarIndisponivel("gemini", String(err?.message ?? err));
+    await log("error", "gemini", "Falha no agrupamento de pauta (Gemini)", { erro: String(err?.message ?? err) });
     return null;
   }
 }

@@ -31,6 +31,19 @@ export default async function PaginaEditarNoticia({
             {noticia.fonte_credito ?? "ver original"}
           </a>
         </p>
+        {noticia.fontes_cruzadas && noticia.fontes_cruzadas.length > 0 && (
+          <p className="text-xs text-slate-500 mt-1">
+            Curadoria multi-fonte — cruzou {noticia.fontes_cruzadas.length} fontes:{" "}
+            {noticia.fontes_cruzadas.map((f, i) => (
+              <span key={f.url}>
+                {i > 0 && ", "}
+                <a href={f.url} className="text-esmeralda hover:underline" target="_blank" rel="noreferrer">
+                  {f.nome}
+                </a>
+              </span>
+            ))}
+          </p>
+        )}
       </div>
 
       {salvo && (

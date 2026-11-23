@@ -155,6 +155,7 @@ export async function agendarPublicacao(resultado: ResultadoPipeline, fonteId: s
       fonte_id: fonteId,
       fonte_url_original: resultado.fonteUrl,
       fonte_credito: resultado.fonteNome,
+      fontes_cruzadas: resultado.fontesCruzadas?.map((f) => ({ nome: f.nome, url: f.url })) ?? null,
       origem_ia: origemIA,
       status: aprovadoParaPublicar ? "agendado" : "rascunho",
       urgente: materia.urgente,
@@ -169,6 +170,18 @@ export async function agendarPublicacao(resultado: ResultadoPipeline, fonteId: s
   }
 
   await marcarComoProcessada(fonteId, resultado.fonteUrl, hashUrl, data.id);
+
+  // Curadoria Multi-Fonte (item novo, 22/11/2026): fecha a Trava de
+  // Silêncio pra TODAS as URLs do grupo, não só a principal — senão as
+  // outras fontes do mesmo fato ficariam "inéditas" de novo no próximo
+  // ciclo e seriam reprocessadas (triagem, busca de imagem etc.) à toa.
+  if (resultado.fontesCruzadas) {
+    for (const extra of resultado.fontesCruzadas) {
+      if (extra.url === resultado.fonteUrl) continue; // já marcada acima — é a própria fonte principal
+      await marcarComoProcessada(extra.fonteId, extra.url, extra.hash, data.id);
+    }
+  }
+
   await log(
     "info",
     "queue",
