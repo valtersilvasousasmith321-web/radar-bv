@@ -185,6 +185,93 @@ function extrairLinksDeArtigos(html: string, urlBase: string): Array<{ url: stri
     .slice(0, 10);
 }
 
+/** Nomes de mês por extenso → número, pra ler data tipo "23 de novembro de 2026". */
+const MESES_PT: Record<string, number> = {
+  janeiro: 1,
+  fevereiro: 2,
+  março: 3,
+  marco: 3,
+  abril: 4,
+  maio: 5,
+  junho: 6,
+  julho: 7,
+  agosto: 8,
+  setembro: 9,
+  outubro: 10,
+  novembro: 11,
+  dezembro: 12,
+};
+
+/**
+ * Acha a primeira data em formato brasileiro dentro de um pedaço de texto
+ * (dd/mm/aaaa, dd-mm-aaaa ou "dd de mês de aaaa"). Usado pra ler a data que
+ * fica do lado de cada link numa página de listagem tipo o Portal da
+ * Transparência — Valter apontou que lá cada licitação já vem com a data
+ * publicada ao lado, então dá pra filtrar o que é velho sem precisar abrir
+ * o PDF primeiro.
+ */
+function extrairDataProxima(texto: string): Date | null {
+  const numerica = texto.match(/\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})\b/);
+  if (numerica) {
+    const [, d, m, a] = numerica;
+    const data = new Date(Number(a), Number(m) - 1, Number(d));
+    if (!Number.isNaN(data.getTime())) return data;
+  }
+
+  const porExtenso = texto.match(/\b(\d{1,2})\s+de\s+([a-zçãéá]+)\s+de\s+(\d{4})\b/i);
+  if (porExtenso) {
+    const [, d, mesNome, a] = porExtenso;
+    const mes = MESES_PT[mesNome.toLowerCase()];
+    if (mes) {
+      const data = new Date(Number(a), mes - 1, Number(d));
+      if (!Number.isNaN(data.getTime())) return data;
+    }
+  }
+
+  return null;
+}
+
+// Quantos dias de folga aceitar entre "hoje" e a data encontrada ao lado do
+// link, antes de considerar o documento velho e pular — cobre fim de
+// semana/feriado (site sem publicação nova) e pequena defasagem entre a
+// data de abertura/publicação exibida e o dia em que o ciclo de coleta rodou.
+const JANELA_DIAS_DOCUMENTO_RECENTE = 3;
+
+// Tags que, na prática, costumam fechar "uma linha/item" de uma listagem
+// (linha de tabela, item de lista, bloco de card). Usadas pra limitar a
+// busca de data ao redor de um link à MESMA linha/item, nunca vazando pra
+// linha vizinha — ver extrairLinksDePdf.
+const REGEX_FIM_DE_BLOCO = /<\/(tr|li|div|p)>/gi;
+
+// Teto de segurança: mesmo sem achar nenhuma tag de fechamento por perto
+// (HTML malformado, tudo numa linha só), nunca deixa o contexto de busca de
+// data passar disso, de cada lado do link.
+const TETO_CONTEXTO_DATA = 600;
+
+/**
+ * Devolve [início, fim] do trecho de HTML onde faz sentido procurar a data
+ * de UM link específico: do fim da linha/item ANTERIOR até o fim da
+ * linha/item ATUAL (a mais próxima tag de fechamento tr/li/div/p depois do
+ * link) — nunca inclui texto da próxima linha. Sem isso, um contexto de
+ * tamanho fixo em caracteres vaza pra linha vizinha em listas com linhas
+ * curtas e acaba "contaminando" item velho com a data do item novo do lado.
+ */
+function limitesDoBlocoDoLink(html: string, inicioLink: number, fimLink: number): [number, number] {
+  REGEX_FIM_DE_BLOCO.lastIndex = 0;
+  let fimBlocoAnterior = 0;
+  let m: RegExpExecArray | null;
+  while ((m = REGEX_FIM_DE_BLOCO.exec(html)) !== null) {
+    if (m.index >= inicioLink) break;
+    fimBlocoAnterior = m.index + m[0].length;
+  }
+
+  REGEX_FIM_DE_BLOCO.lastIndex = fimLink;
+  const proximoFechamento = REGEX_FIM_DE_BLOCO.exec(html);
+  const fimBlocoAtual = proximoFechamento ? proximoFechamento.index + proximoFechamento[0].length : html.length;
+
+  return [Math.max(fimBlocoAnterior, inicioLink - TETO_CONTEXTO_DATA), Math.min(fimBlocoAtual, fimLink + TETO_CONTEXTO_DATA)];
+}
+
 /**
  * Mesma ideia de extrairLinksDeArtigos, mas pra páginas de listagem que
  * linkam DOCUMENTOS (PDF) em vez de matérias — caso do Portal da
@@ -193,10 +280,18 @@ function extrairLinksDeArtigos(html: string, urlBase: string): Array<{ url: stri
  * "slug com hífen" não serve aqui (os links são tipo
  * /arquivos/download/documentos/19208, sem hífen nenhum), então o critério
  * vira: termina em .pdf OU o caminho tem "/download/".
+ *
+ * Também tenta achar a data que normalmente fica do lado do link na
+ * listagem (pedido do Valter: nunca pegar documento velho) — olha só o
+ * texto da MESMA linha/item do link (ver limitesDoBlocoDoLink) e descarta
+ * direto o que for mais velho que `JANELA_DIAS_DOCUMENTO_RECENTE`. Quando
+ * não acha nenhuma data por perto (layout que eu não previ), mantém o
+ * item — a Trava de Silêncio já impede reprocessar o mesmo documento de
+ * novo, então errar pro lado de manter é mais seguro que perder cobertura.
  */
 function extrairLinksDePdf(html: string, urlBase: string): Array<{ url: string; tituloCandidato: string }> {
   const hostBase = new URL(urlBase).hostname;
-  const vistos = new Map<string, string>();
+  const vistos = new Map<string, { tituloCandidato: string; dataEncontrada: Date | null }>();
   const regexAncora = /<a\s+[^>]*href=["']([^"'#]+)["'][^>]*>(.*?)<\/a>/gis;
 
   let match: RegExpExecArray | null;
@@ -218,15 +313,28 @@ function extrairLinksDePdf(html: string, urlBase: string): Array<{ url: string; 
     if (!pareceDocumento) continue;
 
     const textoAncora = match[2].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+
+    const [inicioContexto, fimContexto] = limitesDoBlocoDoLink(html, match.index, match.index + match[0].length);
+    const textoContexto = html
+      .slice(inicioContexto, fimContexto)
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ");
+    const dataEncontrada = extrairDataProxima(textoContexto);
+
     const urlLimpa = absoluta.toString();
-    const tituloAtual = vistos.get(urlLimpa);
-    if (!tituloAtual || textoAncora.length > tituloAtual.length) {
-      vistos.set(urlLimpa, textoAncora);
+    const existente = vistos.get(urlLimpa);
+    if (!existente || textoAncora.length > existente.tituloCandidato.length) {
+      vistos.set(urlLimpa, { tituloCandidato: textoAncora, dataEncontrada: dataEncontrada ?? existente?.dataEncontrada ?? null });
     }
   }
 
+  const hoje = new Date();
+  const limiteAntigo = new Date(hoje);
+  limiteAntigo.setDate(limiteAntigo.getDate() - JANELA_DIAS_DOCUMENTO_RECENTE);
+
   return Array.from(vistos.entries())
-    .map(([url, tituloCandidato]) => ({ url, tituloCandidato }))
+    .filter(([, info]) => !info.dataEncontrada || info.dataEncontrada >= limiteAntigo)
+    .map(([url, info]) => ({ url, tituloCandidato: info.tituloCandidato }))
     .slice(0, 10);
 }
 
