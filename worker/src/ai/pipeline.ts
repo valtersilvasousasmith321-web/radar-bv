@@ -4,10 +4,12 @@ import { triarComGemini, redigirComGeminiFallback, redigirMultiFonteComGeminiFal
 import { redigirComClaude, redigirMultiFonteComClaude, triarComClaude } from "./claude.js";
 import { redigirComGroqFallback, redigirMultiFonteComGroqFallback, triarComGroqFallback } from "./groq.js";
 import { redigirComOpenRouterFallback, redigirMultiFonteComOpenRouterFallback, triarComOpenRouterFallback } from "./openrouter.js";
+import { redigirComMistralFallback, redigirMultiFonteComMistralFallback, triarComMistralFallback } from "./mistral.js";
+import { redigirComCohereFallback, redigirMultiFonteComCohereFallback, triarComCohereFallback } from "./cohere.js";
 import { estaDisponivel, pareceErroDeCota, marcarIndisponivel } from "./quotaTracker.js";
 import type { Editoria, ItemBruto, MateriaRedigida, ResumoGemini } from "../types.js";
 
-type OrigemIA = "claude" | "gemini" | "groq" | "openrouter";
+type OrigemIA = "claude" | "gemini" | "groq" | "openrouter" | "mistral" | "cohere";
 
 export interface FonteCruzada {
   fonteId: string;
@@ -32,7 +34,7 @@ export interface ResultadoPipeline {
   fontesCruzadas?: FonteCruzada[];
 }
 
-/** Triagem com Fallback em cascata (IA local -> Gemini -> Claude -> Groq -> OpenRouter) — compartilhada entre o caminho de fonte única e o multi-fonte. */
+/** Triagem com Fallback em cascata (IA local -> Gemini -> Claude -> Groq -> OpenRouter -> Mistral -> Cohere) — compartilhada entre o caminho de fonte única e o multi-fonte. */
 async function triarComCascata(item: ItemBruto): Promise<ResumoGemini | null> {
   let resumo = await triarComOllama(item);
 
@@ -58,8 +60,24 @@ async function triarComCascata(item: ItemBruto): Promise<ResumoGemini | null> {
     await log("info", "pipeline", "Groq pulado (sem fôlego recente) — indo direto pro OpenRouter", { url: item.url });
   }
 
-  if (!resumo) {
+  if (!resumo && estaDisponivel("openrouter")) {
     resumo = await triarComOpenRouterFallback(item);
+  } else if (!resumo) {
+    await log("info", "pipeline", "OpenRouter pulado (sem fôlego recente) — indo direto pro Mistral", { url: item.url });
+  }
+
+  // Mistral e Cohere (22/11/2026, a pedido do Valter — "ampliar a bancada
+  // de IA"): dois elos a mais no fim da cascata, cada um com sua própria
+  // cota gratuita independente — quanto mais longa a cascata, menor a
+  // chance de um apagão total travar a produção de notícia.
+  if (!resumo && estaDisponivel("mistral")) {
+    resumo = await triarComMistralFallback(item);
+  } else if (!resumo) {
+    await log("info", "pipeline", "Mistral pulado (sem fôlego recente) — indo direto pra Cohere", { url: item.url });
+  }
+
+  if (!resumo && estaDisponivel("cohere")) {
+    resumo = await triarComCohereFallback(item);
   }
 
   if (!resumo) return null; // sujeira de página, ou triagem falhou em todos os provedores
@@ -78,7 +96,7 @@ async function triarComCascata(item: ItemBruto): Promise<ResumoGemini | null> {
   return resumo;
 }
 
-/** Redação-Chefe com Fallback em cascata (Claude -> Gemini -> Groq -> OpenRouter) — fonte única. */
+/** Redação-Chefe com Fallback em cascata (Claude -> Gemini -> Groq -> OpenRouter -> Mistral -> Cohere) — fonte única. */
 async function redigirComCascata(paramsRedacao: {
   topicos: string[];
   fonteNome: string;
@@ -114,9 +132,19 @@ async function redigirComCascata(paramsRedacao: {
     materia = await redigirComGroqFallback(paramsRedacao);
   }
 
-  if (!materia) {
+  if (!materia && estaDisponivel("openrouter")) {
     origemIA = "openrouter";
     materia = await redigirComOpenRouterFallback(paramsRedacao);
+  }
+
+  if (!materia && estaDisponivel("mistral")) {
+    origemIA = "mistral";
+    materia = await redigirComMistralFallback(paramsRedacao);
+  }
+
+  if (!materia) {
+    origemIA = "cohere";
+    materia = await redigirComCohereFallback(paramsRedacao);
   }
 
   if (!materia) return null;
@@ -154,9 +182,19 @@ async function redigirMultiFonteComCascata(paramsRedacao: {
     materia = await redigirMultiFonteComGroqFallback(paramsRedacao);
   }
 
-  if (!materia) {
+  if (!materia && estaDisponivel("openrouter")) {
     origemIA = "openrouter";
     materia = await redigirMultiFonteComOpenRouterFallback(paramsRedacao);
+  }
+
+  if (!materia && estaDisponivel("mistral")) {
+    origemIA = "mistral";
+    materia = await redigirMultiFonteComMistralFallback(paramsRedacao);
+  }
+
+  if (!materia) {
+    origemIA = "cohere";
+    materia = await redigirMultiFonteComCohereFallback(paramsRedacao);
   }
 
   if (!materia) return null;

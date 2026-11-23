@@ -12,7 +12,7 @@ export type Editoria =
   | "cultura";
 
 export type StatusNoticia = "rascunho" | "agendado" | "publicado" | "erro" | "removido";
-export type OrigemIA = "claude" | "gemini" | "groq" | "manual";
+export type OrigemIA = "claude" | "gemini" | "groq" | "openrouter" | "mistral" | "cohere" | "manual";
 export type TipoFonte = "rss" | "html" | "api" | "busca";
 export type NivelLog = "info" | "warning" | "error" | "critico";
 

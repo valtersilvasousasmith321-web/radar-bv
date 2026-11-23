@@ -11,7 +11,7 @@ export type Editoria =
   | "educacao"
   | "cultura";
 
-export type OrigemIA = "claude" | "gemini" | "groq" | "openrouter" | "manual";
+export type OrigemIA = "claude" | "gemini" | "groq" | "openrouter" | "mistral" | "cohere" | "manual";
 
 export type TipoInfografico = "barra" | "linha" | "linha_do_tempo";
 
@@ -111,5 +111,7 @@ export const ORIGEM_IA_LABEL: Record<OrigemIA, string> = {
   gemini: "Gemini",
   groq: "Groq (Llama)",
   openrouter: "OpenRouter",
+  mistral: "Mistral",
+  cohere: "Cohere",
   manual: "equipe do Radar BV",
 };

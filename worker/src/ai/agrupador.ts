@@ -3,6 +3,8 @@ import { agruparComGemini } from "./gemini.js";
 import { agruparComClaude } from "./claude.js";
 import { agruparComGroqFallback } from "./groq.js";
 import { agruparComOpenRouterFallback } from "./openrouter.js";
+import { agruparComMistralFallback } from "./mistral.js";
+import { agruparComCohereFallback } from "./cohere.js";
 import { estaDisponivel } from "./quotaTracker.js";
 import type { ItemBruto } from "../types.js";
 
@@ -46,8 +48,14 @@ export async function agruparItensPorAssunto<T extends ItemBruto>(itens: T[]): P
   if (!resultado && estaDisponivel("groq")) {
     resultado = await agruparComGroqFallback(itensParaPrompt);
   }
-  if (!resultado) {
+  if (!resultado && estaDisponivel("openrouter")) {
     resultado = await agruparComOpenRouterFallback(itensParaPrompt);
+  }
+  if (!resultado && estaDisponivel("mistral")) {
+    resultado = await agruparComMistralFallback(itensParaPrompt);
+  }
+  if (!resultado) {
+    resultado = await agruparComCohereFallback(itensParaPrompt);
   }
 
   const grupos = resultado && validarGrupos(resultado.grupos, itens.length) ? resultado.grupos : null;

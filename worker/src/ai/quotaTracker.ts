@@ -1,3 +1,4 @@
+import { config } from "../config.js";
 import { log } from "../logger.js";
 import { perguntar, jaInformouHoje } from "../relatorios.js";
 
@@ -98,28 +99,53 @@ export async function marcarIndisponivel(
   await avisarSeApagaoTotal();
 }
 
-/** Provedores de nuvem que, juntos, cobrem toda a bancada paga — Ollama (local) fica de fora porque não tem cota pra esgotar. */
-const PROVEDORES_CLOUD: Provedor[] = ["gemini", "claude", "groq", "openrouter"];
+/** Todo provedor de nuvem com chave configurada (Ollama fica de fora: é local, não tem cota pra esgotar). */
+const CHAVE_CONFIGURADA: Partial<Record<Provedor, boolean>> = {
+  gemini: true, // obrigatória (config.ts falha no boot sem ela)
+  claude: true, // obrigatória
+  groq: !!config.ia.groqApiKey,
+  openrouter: !!config.ia.openrouterApiKey,
+  mistral: !!config.ia.mistralApiKey,
+  cohere: !!config.ia.cohereApiKey,
+};
+
+/**
+ * Lista dinâmica: só entra na checagem de apagão quem de fato está na
+ * bancada (tem chave configurada) — senão o Mistral/Cohere sem chave ainda
+ * (nunca marcados "sem fôlego" porque nunca chegam a tentar) ficariam pra
+ * sempre contando como "disponíveis", e o apagão nunca seria detectado
+ * mesmo com Gemini/Claude/Groq/OpenRouter todos fora do ar.
+ */
+function provedoresCloudAtivos(): Provedor[] {
+  return (Object.keys(CHAVE_CONFIGURADA) as Provedor[]).filter((p) => CHAVE_CONFIGURADA[p]);
+}
 
 /**
  * Central de Transparência (item 22): o cenário que realmente merece uma
  * pergunta pro Valter não é "um provedor ficou sem fôlego" (isso é rotina,
  * o fallback em cascata já resolve sozinho) — é todos os provedores de
- * nuvem pagos ficarem indisponíveis AO MESMO TEMPO, porque aí o Radar BV
- * para de produzir matéria nova até algum voltar. Um aviso por dia é
- * suficiente pra não repetir a cada item descartado enquanto durar o apagão.
+ * nuvem configurados ficarem indisponíveis AO MESMO TEMPO, porque aí o
+ * Radar BV para de produzir matéria nova até algum voltar. Um aviso por dia
+ * é suficiente pra não repetir a cada item descartado enquanto durar o apagão.
  */
 async function avisarSeApagaoTotal(): Promise<void> {
-  const todosIndisponiveis = PROVEDORES_CLOUD.every((p) => !estaDisponivel(p));
+  const ativos = provedoresCloudAtivos();
+  const todosIndisponiveis = ativos.length > 0 && ativos.every((p) => !estaDisponivel(p));
   if (!todosIndisponiveis) return;
 
   const marcador = `apagao-total-${new Date().toISOString().slice(0, 10)}`;
   if (await jaInformouHoje("Supervisor de Provedores de IA", marcador)) return;
 
+  const faltandoChave = (["mistral", "cohere"] as Provedor[]).filter((p) => !CHAVE_CONFIGURADA[p]);
+  const sugestao =
+    faltandoChave.length > 0
+      ? ` Vale a pena criar a(s) conta(s) de ${faltandoChave.join(" e ")} (ainda sem chave configurada) pra ampliar a bancada e isso não se repetir.`
+      : "";
+
   await perguntar(
     "Supervisor de Provedores de IA",
-    "Todos os provedores de IA de nuvem (Gemini, Claude, Groq e OpenRouter) estão sem fôlego ao mesmo tempo agora — o Radar BV vai parar de produzir matéria nova até algum deles voltar. Isso é um bom sinal de que vale a pena criar as contas do Mistral e da Cohere que a gente tinha planejado, pra ampliar a bancada e isso não se repetir.",
-    { provedores: PROVEDORES_CLOUD, marcador }
+    `Todos os provedores de IA de nuvem configurados (${ativos.join(", ")}) estão sem fôlego ao mesmo tempo agora — o Radar BV vai parar de produzir matéria nova até algum deles voltar.${sugestao}`,
+    { provedoresAtivos: ativos, faltandoChave, marcador }
   );
 }
 

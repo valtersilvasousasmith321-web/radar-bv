@@ -28,6 +28,11 @@ export const config = {
     // frequência. Opcional — some sozinho da cascata se a chave não for
     // configurada ainda.
     openrouterApiKey: process.env.OPENROUTER_API_KEY ?? "",
+    // Mais 2 elos gratuitos na cascata (22/11/2026, a pedido do Valter —
+    // "ampliar a bancada de IA pra reduzir apagão total"). Opcionais, iguais
+    // à OpenRouter: sem a chave, o provedor some sozinho da cascata.
+    mistralApiKey: process.env.MISTRAL_API_KEY ?? "",
+    cohereApiKey: process.env.COHERE_API_KEY ?? "",
     // IA própria/local via Ollama (serviço pesado da triagem, sem cota/custo
     // nenhum — roda no próprio computador). Totalmente opcional: se o Ollama
     // não estiver instalado/rodando, o sistema cai sozinho pra cascata de

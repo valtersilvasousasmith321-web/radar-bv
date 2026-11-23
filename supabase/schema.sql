@@ -24,7 +24,10 @@ do $$ begin
 exception when duplicate_object then null; end $$;
 
 do $$ begin
-  create type origem_ia as enum ('claude', 'gemini', 'groq', 'openrouter', 'manual');
+  -- 'mistral' e 'cohere' adicionados em 22/11/2026 (ver
+  -- supabase/migracao-mistral-cohere.sql) — mais 2 elos gratuitos na
+  -- bancada de IA, a pedido do Valter.
+  create type origem_ia as enum ('claude', 'gemini', 'groq', 'openrouter', 'mistral', 'cohere', 'manual');
 exception when duplicate_object then null; end $$;
 
 do $$ begin
