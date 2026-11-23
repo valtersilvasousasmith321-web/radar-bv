@@ -186,6 +186,132 @@ function extrairLinksDeArtigos(html: string, urlBase: string): Array<{ url: stri
 }
 
 /**
+ * Mesma ideia de extrairLinksDeArtigos, mas pra páginas de listagem que
+ * linkam DOCUMENTOS (PDF) em vez de matérias — caso do Portal da
+ * Transparência da Prefeitura (licitações, atas, editais), que só expõe
+ * PDF pra baixar, nunca uma página de notícia de verdade. A heurística de
+ * "slug com hífen" não serve aqui (os links são tipo
+ * /arquivos/download/documentos/19208, sem hífen nenhum), então o critério
+ * vira: termina em .pdf OU o caminho tem "/download/".
+ */
+function extrairLinksDePdf(html: string, urlBase: string): Array<{ url: string; tituloCandidato: string }> {
+  const hostBase = new URL(urlBase).hostname;
+  const vistos = new Map<string, string>();
+  const regexAncora = /<a\s+[^>]*href=["']([^"'#]+)["'][^>]*>(.*?)<\/a>/gis;
+
+  let match: RegExpExecArray | null;
+  while ((match = regexAncora.exec(html)) !== null) {
+    const hrefBruto = match[1].trim();
+    if (!hrefBruto || hrefBruto.startsWith("javascript:") || hrefBruto.startsWith("mailto:") || hrefBruto.startsWith("tel:")) {
+      continue;
+    }
+
+    let absoluta: URL;
+    try {
+      absoluta = new URL(hrefBruto, urlBase);
+    } catch {
+      continue;
+    }
+    if (absoluta.hostname !== hostBase) continue; // só documentos do próprio site da fonte
+
+    const pareceDocumento = /\.pdf(?:$|\?)/i.test(absoluta.pathname) || /\/download\//i.test(absoluta.pathname);
+    if (!pareceDocumento) continue;
+
+    const textoAncora = match[2].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    const urlLimpa = absoluta.toString();
+    const tituloAtual = vistos.get(urlLimpa);
+    if (!tituloAtual || textoAncora.length > tituloAtual.length) {
+      vistos.set(urlLimpa, textoAncora);
+    }
+  }
+
+  return Array.from(vistos.entries())
+    .map(([url, tituloCandidato]) => ({ url, tituloCandidato }))
+    .slice(0, 10);
+}
+
+/**
+ * Baixa UM PDF e extrai o texto (pdf-parse). Isolado por documento — um PDF
+ * corrompido, escaneado sem OCR (sem texto nenhum) ou grande demais não
+ * derruba os outros da mesma fonte, só retorna null e esse item é pulado.
+ *
+ * Diário Oficial e atas de licitação às vezes têm centenas de páginas —
+ * cortamos o texto em 15.000 caracteres pra não estourar o limite de
+ * contexto da IA na hora de redigir (a matéria vai sair de qualquer forma,
+ * só que baseada no começo do documento, que normalmente é onde está o
+ * resumo/objeto do que está sendo decidido).
+ */
+async function baixarEExtrairPdf(url: string): Promise<string | null> {
+  try {
+    const resposta = await fetch(url, {
+      signal: AbortSignal.timeout(20_000),
+      headers: { "User-Agent": USER_AGENT, Accept: "application/pdf" },
+      agent: url.startsWith("https:") ? agenteTlsPermissivo : undefined,
+    });
+    if (!resposta.ok) return null;
+
+    const buffer = Buffer.from(await resposta.arrayBuffer());
+    const pdfParse = (await import("pdf-parse")).default;
+    const resultado = await pdfParse(buffer);
+    const texto = (resultado.text ?? "").trim();
+
+    // PDF escaneado como imagem (sem camada de texto) extrai string vazia
+    // ou só lixo — melhor descartar que mandar "nada" pra IA redigir.
+    if (texto.length < 100) return null;
+
+    return texto.slice(0, 15_000);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Extrai itens de uma fonte do tipo PDF: a fonte é uma página de LISTAGEM
+ * (ex: .../licitacoes) que linka vários documentos PDF — não um PDF direto.
+ * Mesmo Isolamento de Fontes dos outros tipos: PDF que falhar ao baixar ou
+ * extrair é só descartado, não derruba os demais documentos da mesma fonte.
+ */
+async function coletarPdf(fonte: FonteMonitorada): Promise<ItemBruto[]> {
+  const resposta = await fetch(fonte.url_base, {
+    signal: AbortSignal.timeout(15_000),
+    headers: { "User-Agent": USER_AGENT, Accept: "text/html,application/xhtml+xml" },
+    agent: fonte.url_base.startsWith("https:") ? agenteTlsPermissivo : undefined,
+  });
+  if (!resposta.ok) {
+    throw new Error(`HTTP ${resposta.status} ao buscar ${fonte.url_base}`);
+  }
+  const html = await resposta.text();
+  const links = extrairLinksDePdf(html, fonte.url_base);
+
+  if (links.length === 0) {
+    // Página de listagem sem nenhum link de PDF reconhecido — provavelmente
+    // o site mudou de estrutura. Diferente do coletarHtml, aqui NÃO faz
+    // sentido tratar a própria página de listagem como "1 item" (ela não
+    // tem conteúdo de notícia, só uma lista de links) — melhor não publicar
+    // nada nesse ciclo do que publicar lixo de menu/rodapé.
+    return [];
+  }
+
+  const itens = await Promise.all(
+    links.map(async ({ url, tituloCandidato }): Promise<ItemBruto | null> => {
+      const texto = await baixarEExtrairPdf(url);
+      if (!texto) return null; // isolado: um PDF falhando não derruba os outros
+      return {
+        fonteId: fonte.id,
+        fonteNome: fonte.nome,
+        url,
+        tituloOriginal: tituloCandidato || fonte.nome,
+        conteudoBruto: texto,
+        editoriaPadrao: fonte.editoria_padrao,
+        creditarPublicamente: fonte.creditar_publicamente,
+      };
+    })
+  );
+
+  return itens.filter((item): item is ItemBruto => item !== null);
+}
+
+/**
  * Busca o HTML de UMA URL de artigo específico, com o mesmo User-Agent e
  * agente TLS permissivo usados no resto do coletor. Retorna null em caso de
  * falha (isolado — quem chama decide o que fazer, nunca propaga o erro).
@@ -348,7 +474,9 @@ async function coletarDeUmaFonte(fonte: FonteMonitorada): Promise<ItemBruto[]> {
         ? await coletarRss(fonte)
         : fonte.tipo === "busca"
           ? await coletarBusca(fonte)
-          : await coletarHtml(fonte);
+          : fonte.tipo === "pdf"
+            ? await coletarPdf(fonte)
+            : await coletarHtml(fonte);
 
     if (fonte.erros_consecutivos > 0) {
       await supabase.from("fontes_monitoradas").update({ erros_consecutivos: 0, ultimo_erro: null }).eq("id", fonte.id);

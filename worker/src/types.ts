@@ -13,7 +13,7 @@ export type Editoria =
 
 export type StatusNoticia = "rascunho" | "agendado" | "publicado" | "erro" | "removido";
 export type OrigemIA = "claude" | "gemini" | "groq" | "openrouter" | "mistral" | "cohere" | "manual";
-export type TipoFonte = "rss" | "html" | "api" | "busca";
+export type TipoFonte = "rss" | "html" | "api" | "busca" | "pdf";
 export type NivelLog = "info" | "warning" | "error" | "critico";
 
 export interface FonteMonitorada {

@@ -34,7 +34,10 @@ do $$ begin
   -- "busca": fonte por TEMA pesquisado na web (via pesquisador.ts), não por
   -- URL fixa — a mesma estrutura de busca que a IA usa no chat, por trás dos
   -- panos do coletor de notícias.
-  create type tipo_fonte as enum ('rss', 'html', 'api', 'busca');
+  -- 'pdf' adicionado em 23/11/2026 (ver supabase/migracao-fontes-pdf-PARTE1.sql)
+  -- — fontes cuja listagem só linka documento PDF pra baixar (ex: Portal da
+  -- Transparência da Prefeitura, que só tem edital/ata em PDF).
+  create type tipo_fonte as enum ('rss', 'html', 'api', 'busca', 'pdf');
 exception when duplicate_object then null; end $$;
 
 do $$ begin
