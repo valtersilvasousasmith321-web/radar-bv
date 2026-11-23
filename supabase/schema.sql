@@ -387,7 +387,23 @@ values
   ('Governo de Roraima', 'https://www.rr.gov.br/feed', 'rss', 'roraima'),
   ('Câmara Municipal de Boa Vista', 'https://camaraboavista.rr.gov.br/feed', 'rss', 'politica'),
   ('Diário Oficial de Roraima', 'https://doe.rr.gov.br', 'html', 'politica'),
-  ('Polícia Civil de Roraima', 'https://pc.rr.gov.br/feed', 'rss', 'policia')
+  ('Polícia Civil de Roraima', 'https://pc.rr.gov.br/feed', 'rss', 'policia'),
+  ('Assembleia Legislativa de Roraima (ALE-RR)', 'https://al.rr.leg.br/noticias/', 'html', 'politica')
+on conflict do nothing;
+
+-- Fontes de busca adicionadas depois, pra cobrir órgãos oficiais sem
+-- página de notícias própria confiável (ver supabase/migracao-fontes-primarias.sql
+-- pra detalhes da pesquisa que levou a cada uma).
+insert into fontes_monitoradas (nome, url_base, tipo, editoria_padrao)
+values
+  ('Busca: Polícia Militar e Bombeiros de Roraima', 'notas oficiais da Polícia Militar de Roraima e do Corpo de Bombeiros Militar de Roraima', 'busca', 'policia'),
+  ('Busca: Tribunal de Justiça de Roraima', 'notícias e decisões do Tribunal de Justiça de Roraima (TJRR)', 'busca', 'politica'),
+  ('Busca: Diário Oficial do Município de Boa Vista', 'atos e publicações do Diário Oficial do Município de Boa Vista', 'busca', 'politica'),
+  ('Busca: Diário Oficial da União em Roraima', 'atos do Diário Oficial da União sobre Roraima e Boa Vista', 'busca', 'politica'),
+  ('Busca: Alertas meteorológicos INMET Roraima', 'alerta meteorológico do INMET para Roraima e Boa Vista hoje', 'busca', 'roraima'),
+  ('Busca: IBGE Roraima', 'dados do IBGE sobre Roraima e Boa Vista', 'busca', 'roraima'),
+  ('Busca: Banco Central e Receita Federal em Roraima', 'Banco Central e Receita Federal: economia e tributos em Roraima', 'busca', 'economia'),
+  ('Busca: Portal da Transparência Roraima', 'Portal da Transparência: gastos públicos em Roraima e Boa Vista', 'busca', 'politica')
 on conflict do nothing;
 
 -- Temas de busca já prontos de fábrica — a IA já sai pesquisando esses temas
