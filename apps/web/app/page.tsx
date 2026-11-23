@@ -35,12 +35,21 @@ export default async function Home() {
     ? [candidataDestaqueManual!, ...noticias.filter((n) => n.id !== candidataDestaqueManual!.id)].slice(0, QUANTIDADE_CARROSSEL)
     : noticias.slice(0, QUANTIDADE_CARROSSEL);
   const destaque = destaques[0];
-  const secundarias = noticias.filter((n) => !destaques.some((d) => d.id === n.id)).slice(0, 3);
-  const roraima = (await getNoticias({ editoria: "roraima", limite: 4 })).length
-    ? await getNoticias({ editoria: "roraima", limite: 4 })
-    : noticias.slice(3, 7);
-  const mundo = await getNoticias({ editoria: "brasil_mundo", limite: 4 });
-  const servicoCidadao = await getNoticias({ editoria: "servico_cidadao", limite: 4 });
+  // IDs já exibidos no carrossel do topo — as seções abaixo (Roraima, Brasil
+  // & Mundo, Serviço ao Cidadão) não podem repetir nenhuma delas, senão a
+  // mesma manchete aparece 2x na primeira dobra (achado real: "Seca severa em
+  // Roraima" no topo E de novo como primeiro card da seção Roraima, 22/11/2026).
+  // Busca com uma folga (limite + destaques.length) pra, depois de filtrar as
+  // repetidas, ainda sobrar a quantidade certa de notícia inédita na seção.
+  const idsNoTopo = new Set(destaques.map((d) => d.id));
+  const semRepetirTopo = (lista: Awaited<ReturnType<typeof getNoticias>>, quantidade: number) =>
+    lista.filter((n) => !idsNoTopo.has(n.id)).slice(0, quantidade);
+
+  const secundarias = semRepetirTopo(noticias, 3);
+  const roraimaBruto = await getNoticias({ editoria: "roraima", limite: 4 + idsNoTopo.size });
+  const roraima = roraimaBruto.length ? semRepetirTopo(roraimaBruto, 4) : semRepetirTopo(noticias.slice(3), 4);
+  const mundo = semRepetirTopo(await getNoticias({ editoria: "brasil_mundo", limite: 4 + idsNoTopo.size }), 4);
+  const servicoCidadao = semRepetirTopo(await getNoticias({ editoria: "servico_cidadao", limite: 4 + idsNoTopo.size }), 4);
 
   const statusMesaRedacao = await getStatusMesaRedacao();
   const bannerTopo = await getBanner("topo");
