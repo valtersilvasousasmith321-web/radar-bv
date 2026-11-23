@@ -65,7 +65,7 @@ A DATA DE HOJE É: ${hoje}. Use essa data (e não qualquer outra suposição sua
 REGRAS INVIOLÁVEIS:
 1. Use APENAS fatos literalmente presentes no texto bruto abaixo. NUNCA invente, deduza ou complete nomes, datas, números, cargos ou declarações que não estejam explícitos no texto.
 2. Se o texto bruto for sujeira de página (menus, rodapé, scripts) sem conteúdo noticioso real, retorne "topicos": [] e "assuntoJaCoberto": false.
-3. Extraia de 8 a 12 tópicos objetivos (máximo 400 palavras no total) — não resuma demais: pegue o quê, quem, quando, onde, por quê, E TAMBÉM números, contexto, antecedentes, consequências e qualquer citação/declaração entre aspas que estiver literalmente no texto. O objetivo é dar material suficiente pra uma matéria completa, não um resumo raso — mas segue valendo que é só o que estiver no texto, nunca invente ou complete.
+3. Extraia de 12 a 18 tópicos objetivos (máximo 700 palavras no total) — não resuma demais: pegue o quê, quem, quando, onde, por quê, E TAMBÉM números, contexto, antecedentes, consequências, declarações entre aspas e qualquer detalhe secundário que estiver literalmente no texto (um detalhe que pareça pouco importante ainda assim vale a pena extrair — é o Redator-Chefe quem decide o que entra na matéria final, não a triagem). O objetivo é dar o MÁXIMO de material possível pra uma matéria completa e com profundidade de verdade — sem nunca inventar ou completar o que não estiver no texto. Se o texto bruto for naturalmente curto (pouco conteúdo na fonte original), extraia menos tópicos mesmo — a regra é esgotar o que existe no texto, nunca inflar com repetição.
 4. Sugira uma editoria dentre exatamente: ${EDITORIAS_VALIDAS.join(", ")}. Se a fonte já tem editoria padrão ("${params.editoriaPadrao ?? "nenhuma"}"), use-a a menos que o conteúdo claramente pertença a outra.
 5. Sugira uma palavra-chave de busca de imagem EM INGLÊS, com 2 a 4 palavras, bem descritiva e concreta (ex.: "dry river drought", "government office meeting", "indigenous land forest"), pensada para buscar em bancos de imagens internacionais (Unsplash/Pixabay/Pexels). NUNCA use uma palavra portuguesa isolada nem um termo ambíguo que possa ser confundido com nome de lugar (ex.: "rio" sozinho retorna fotos da cidade do Rio de Janeiro em vez de um rio comum — descreva a cena em inglês, como "river" ou "riverbank", em vez disso).
 6. CONTEÚDO DESATUALIZADO: se o texto menciona uma data, período ou prazo específico (feira, evento, inscrição, campanha, "nos dias X a Y", "até o dia X") e, comparando com a DATA DE HOJE acima, esse período JÁ TERMINOU — mas o texto trata isso como algo futuro/atual ("vai ter", "acontece em breve", "inscrições abertas até") — marque "conteudoDesatualizado": true e retorne "topicos": []. Isso é diferente de notícia histórica/retrospectiva (que fala do passado como passado, essa pode virar matéria normalmente) — o problema é SÓ quando o texto apresenta como futuro algo que já passou.
@@ -103,7 +103,7 @@ REGRAS INVIOLÁVEIS (blindagem anti-fake news / anti-alucinação):
 {
   "titulo": "string (máx. 90 caracteres, sem clickbait)",
   "subtitulo": "string (máx. 160 caracteres)",
-  "conteudo": "string (5 a 8 parágrafos em texto corrido, parágrafos separados por \\n\\n — desenvolva TODOS os tópicos apurados com profundidade, incluindo contexto e antecedentes quando houver; nunca encha linguiça repetindo a mesma informação com outras palavras só pra alongar)",
+  "conteudo": "string (7 a 11 parágrafos em texto corrido, parágrafos separados por \\n\\n, no mínimo umas 400 palavras no total quando os tópicos apurados derem material pra isso — desenvolva TODOS os tópicos apurados com profundidade, cada um ganhando espaço de verdade no texto, incluindo contexto, antecedentes e consequências quando houver nos tópicos; nunca encha linguiça repetindo a mesma informação com outras palavras só pra alongar — se os tópicos apurados forem genuinamente poucos, a matéria pode ficar mais curta mesmo, com qualidade sempre na frente de tamanho)",
   "editoria": "${EDITORIAS_VALIDAS.join("|")}",
   "tags": ["string", "..."],
   "urgente": boolean
@@ -155,7 +155,7 @@ REGRAS INVIOLÁVEIS (blindagem anti-fake news / anti-alucinação):
 {
   "titulo": "string (máx. 90 caracteres, sem clickbait)",
   "subtitulo": "string (máx. 160 caracteres)",
-  "conteudo": "string (5 a 9 parágrafos em texto corrido, parágrafos separados por \\n\\n — desenvolva TODOS os tópicos apurados com profundidade, terminando com o parágrafo de contexto exclusivo do Radar BV quando aplicável)",
+  "conteudo": "string (7 a 11 parágrafos em texto corrido, parágrafos separados por \\n\\n — desenvolva TODOS os tópicos apurados de TODAS as fontes com profundidade, terminando com o parágrafo de contexto exclusivo do Radar BV quando aplicável)",
   "editoria": "${EDITORIAS_VALIDAS.join("|")}",
   "tags": ["string", "..."],
   "urgente": boolean

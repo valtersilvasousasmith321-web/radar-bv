@@ -37,7 +37,10 @@ export async function triarComClaude(item: ItemBruto): Promise<ResumoGemini | nu
 
     const resposta = await anthropic.messages.create({
       model: "claude-haiku-5-5",
-      max_tokens: 1500,
+      // Ampliado de 1500 pra 2200 (22/11/2026 — Valter pediu matérias mais
+      // completas): a triagem agora extrai de 12 a 18 tópicos (antes 8-12),
+      // e o limite antigo cortava o JSON no meio em textos mais longos.
+      max_tokens: 2200,
       // O Haiku 5.5 "pensa" (thinking) por padrão em todo pedido, e esse
       // pensamento consome do MESMO limite de max_tokens da resposta final —
       // em notícias mais complexas, o pensamento comia o espaço e cortava o
@@ -99,7 +102,9 @@ export async function redigirMultiFonteComClaude(params: {
 async function chamarClaudeParaRedacao(prompt: string, rotuloLog: string): Promise<MateriaRedigida | null> {
   const resposta = await anthropic.messages.create({
     model: "claude-haiku-5-5",
-    max_tokens: 2000,
+    // Ampliado de 2000 pra 3000 (22/11/2026 — matérias agora miram 7-11
+    // parágrafos em vez de 5-8).
+    max_tokens: 3000,
     // Mesmo motivo da triagem: reduz o "pensamento" interno que disputava
     // espaço com o texto final da matéria redigida.
     output_config: { effort: "low" },

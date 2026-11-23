@@ -46,7 +46,9 @@ export async function triarComGroqFallback(item: ItemBruto): Promise<ResumoGemin
       model: MODELO_FALLBACK,
       messages: [{ role: "user", content: prompt }],
       temperature: 0.2,
-      max_tokens: 1200,
+      // Ampliado de 1200 pra 1800 (22/11/2026): triagem agora extrai de 12 a
+      // 18 tópicos (antes 8-12).
+      max_tokens: 1800,
       // "openai/gpt-oss-120b" é um modelo de raciocínio: ele gasta tokens
       // "pensando" (reasoning_content) antes do texto final, e em casos
       // extremos isso consumia o orçamento todo e devolvia content vazio.
@@ -107,7 +109,9 @@ async function chamarGroqParaRedacao(prompt: string, rotuloLog: string): Promise
       model: MODELO_FALLBACK,
       messages: [{ role: "user", content: prompt }],
       temperature: 0.3,
-      max_tokens: 2000,
+      // Ampliado de 2000 pra 3000 (22/11/2026): matérias agora miram 7-11
+      // parágrafos em vez de 5-8.
+      max_tokens: 3000,
       // Mesmo motivo da triagem: reduz o raciocínio interno do modelo pra
       // não disputar espaço com o texto final da matéria.
       reasoning_effort: "low",

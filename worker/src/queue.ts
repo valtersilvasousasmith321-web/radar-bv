@@ -29,13 +29,38 @@ function gerarSlug(titulo: string): string {
 /** Guarda o próximo horário livre de publicação em memória do processo */
 let proximoSlotPublicacao: number | null = null;
 
-/** Calcula o próximo horário de publicação respeitando 20-30min entre posts */
-function calcularProximoSlot(): Date {
+/**
+ * Calcula o próximo horário de publicação respeitando 20-30min entre posts
+ * — mas ENCOLHE esse intervalo quando a fila de "agendado" está grande
+ * demais (item novo, 22/11/2026 — flagrado por Valter: notícia saindo
+ * atrasada, que outro veículo já tinha publicado no dia anterior).
+ *
+ * Com o intervalo fixo de 20-30min (média 25min), a capacidade de escoar a
+ * fila é de ~57 notícias/dia (24h / 25min). Com a entrada de várias fontes
+ * novas (Parte 1 do plano de apuração — ALE-RR e 8 fontes de busca novas),
+ * o volume coletado por dia pode passar disso — e qualquer excedente
+ * empurra a fila pro dia seguinte, cada vez mais atrasada, sem nunca se
+ * recuperar sozinho. Quando a fila de espera já está grande, este ajuste
+ * encolhe o intervalo (até 40% do normal) pra escoar mais rápido; volta ao
+ * intervalo normal assim que a fila esvazia de novo.
+ */
+async function calcularProximoSlot(): Promise<Date> {
   const agora = Date.now();
   const base = proximoSlotPublicacao && proximoSlotPublicacao > agora ? proximoSlotPublicacao : agora;
 
   const { minMinutos, maxMinutos } = config.gotejamento;
-  const intervaloMin = minMinutos + Math.random() * (maxMinutos - minMinutos);
+
+  const { count, error } = await supabase.from("noticias").select("id", { count: "exact", head: true }).eq("status", "agendado");
+  const filaEsperando = error ? 0 : (count ?? 0);
+  const fatorReducao = filaEsperando > 40 ? 0.4 : filaEsperando > 20 ? 0.6 : filaEsperando > 10 ? 0.8 : 1;
+  if (fatorReducao < 1) {
+    await log("info", "queue", `Fila de Gotejamento com ${filaEsperando} notícia(s) esperando — encolhendo o intervalo pra escoar mais rápido`, {
+      filaEsperando,
+      fatorReducao,
+    });
+  }
+
+  const intervaloMin = (minMinutos + Math.random() * (maxMinutos - minMinutos)) * fatorReducao;
   const proximo = base + intervaloMin * 60_000;
 
   proximoSlotPublicacao = proximo;
@@ -138,7 +163,7 @@ export async function agendarPublicacao(resultado: ResultadoPipeline, fonteId: s
   const slug = gerarSlug(materia.titulo);
   // Editor-chefe/Organizador (item 11) — priorização: matéria urgente não
   // espera atrás das comuns na fila do gotejamento, publica quase na hora.
-  const dataPublicacao = materia.urgente ? calcularSlotUrgente() : calcularProximoSlot();
+  const dataPublicacao = materia.urgente ? calcularSlotUrgente() : await calcularProximoSlot();
   const resumoWhatsApp = gerarResumoWhatsApp(materia, slug);
 
   const { data, error } = await supabase

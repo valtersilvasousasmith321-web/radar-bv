@@ -407,6 +407,24 @@ values
   ('Busca: Portal da Transparência Roraima', 'Portal da Transparência: gastos públicos em Roraima e Boa Vista', 'busca', 'politica')
 on conflict do nothing;
 
+-- Equilíbrio de Proporção, parte 2 (22/11/2026): essas 8 fontes de busca são
+-- cobertura suplementar (não o foco local principal), e sem teto podiam
+-- aumentar demais o volume diário coletado, empurrando a Fila de
+-- Gotejamento pra além do que consegue escoar em 24h — notícia saindo
+-- atrasada pro dia seguinte. Mesmo princípio do teto da "Busca: Brasil e
+-- Mundo" abaixo, só que mais conservador (2/dia cada).
+update fontes_monitoradas set limite_diario = 2
+where nome in (
+  'Busca: Polícia Militar e Bombeiros de Roraima',
+  'Busca: Tribunal de Justiça de Roraima',
+  'Busca: Diário Oficial do Município de Boa Vista',
+  'Busca: Diário Oficial da União em Roraima',
+  'Busca: Alertas meteorológicos INMET Roraima',
+  'Busca: IBGE Roraima',
+  'Busca: Banco Central e Receita Federal em Roraima',
+  'Busca: Portal da Transparência Roraima'
+);
+
 -- Temas de busca já prontos de fábrica — a IA já sai pesquisando esses temas
 -- sozinha a cada ciclo, sem precisar de nenhuma configuração manual extra.
 -- Um tema por editoria, cobrindo o fluxo diário de notícias.
