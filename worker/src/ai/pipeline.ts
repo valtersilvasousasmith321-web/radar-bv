@@ -7,6 +7,7 @@ import { redigirComOpenRouterFallback, redigirMultiFonteComOpenRouterFallback, t
 import { redigirComMistralFallback, redigirMultiFonteComMistralFallback, triarComMistralFallback } from "./mistral.js";
 import { redigirComCohereFallback, redigirMultiFonteComCohereFallback, triarComCohereFallback } from "./cohere.js";
 import { estaDisponivel, pareceErroDeCota, marcarIndisponivel } from "./quotaTracker.js";
+import { informar, jaInformouHoje } from "../relatorios.js";
 import type { Editoria, ItemBruto, MateriaRedigida, ResumoGemini } from "../types.js";
 
 type OrigemIA = "claude" | "gemini" | "groq" | "openrouter" | "mistral" | "cohere";
@@ -52,13 +53,68 @@ function juntarNomes(nomes: string[]): string | null {
   return `${nomes.slice(0, -1).join(", ")} e ${nomes[nomes.length - 1]}`;
 }
 
+function normalizarNome(texto: string): string {
+  return texto
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .trim();
+}
+
+/**
+ * Flagrado por Valter em 23/11/2026: uma matéria saiu publicamente creditada
+ * como "Com informações de: G1 — Brasil" mesmo já existindo a regra de
+ * Crédito de Fonte Primária abaixo — porque o texto apurado citava "segundo
+ * o G1" dentro do próprio conteúdo, e a IA extraiu "G1" como se fosse a
+ * "fontePrimaria" (um órgão/entidade que originou o fato), quando na
+ * verdade G1 é só quem REPORTOU, exatamente o tipo de veículo concorrente
+ * que essa regra existe pra nunca aparecer no crédito público. O prompt
+ * (prompts.ts) agora proíbe isso explicitamente, mas— seguindo a mesma
+ * filosofia de defesa em camadas já usada em images.ts pra editoria
+ * "brasil_mundo" — este filtro em código barra esses nomes mesmo se a IA
+ * ignorar a instrução, sem depender só dela obedecer.
+ */
+const VEICULOS_IMPRENSA_BLOQUEADOS = [
+  "g1",
+  "globo",
+  "o globo",
+  "folha de s.paulo",
+  "folha de sao paulo",
+  "folha de boa vista",
+  "estadao",
+  "uol",
+  "r7",
+  "metropoles",
+  "cnn brasil",
+  "band",
+  "record",
+  "sbt",
+  "veja",
+  "exame",
+  "terra",
+  "ig",
+];
+
+function fontePrimariaValida(fontePrimaria: string | null | undefined): string | null {
+  const limpa = fontePrimaria?.trim();
+  if (!limpa) return null;
+  const normalizada = normalizarNome(limpa);
+  const ehVeiculoDeImprensa = VEICULOS_IMPRENSA_BLOQUEADOS.some(
+    (v) => normalizada === v || normalizada.startsWith(`${v} `) || normalizada.startsWith(`${v}-`) || normalizada.startsWith(`${v}—`)
+  );
+  return ehVeiculoDeImprensa ? null : limpa;
+}
+
 /**
  * Crédito de Fonte Primária (22/11/2026 — a pedido do Valter: "não pode
  * parecer que a gente copiou o G1/Folha, tem que buscar a fonte principal
  * do jeito que eles fazem"). Prioridade:
  *   1. A fonte primária que a própria IA identificou dentro do texto
  *      apurado (ex.: "Ministério da Saúde") — sempre a mais específica e
- *      honesta, usada independente de qual veículo foi coletado.
+ *      honesta, usada independente de qual veículo foi coletado — DESDE QUE
+ *      não seja, ela mesma, o nome de um veículo de imprensa (ver
+ *      fontePrimariaValida acima; isso nunca deveria acontecer dado o
+ *      prompt, mas é barrado em código do mesmo jeito, por segurança).
  *   2. Na ausência dela, os nomes das fontes de coleta que PODEM aparecer
  *      publicamente (creditarPublicamente === true) — comportamento igual
  *      ao de sempre para fontes oficiais, agências e "busca".
@@ -68,8 +124,8 @@ function juntarNomes(nomes: string[]): string | null {
  *      um concorrente.
  */
 function calcularCreditoPublico(fontePrimaria: string | null | undefined, fontes: Array<{ nome: string; creditarPublicamente: boolean }>): string | null {
-  const primariaLimpa = fontePrimaria?.trim();
-  if (primariaLimpa) return primariaLimpa;
+  const primariaValida = fontePrimariaValida(fontePrimaria);
+  if (primariaValida) return primariaValida;
   return juntarNomes(fontes.filter((f) => f.creditarPublicamente).map((f) => f.nome));
 }
 
@@ -147,7 +203,57 @@ async function triarComCascata(item: ItemBruto): Promise<ResumoGemini | null> {
     return null;
   }
 
+  await travarEditoriaForaDeRoraima(item, resumo);
+
   return resumo;
+}
+
+/**
+ * Trava de Geografia (flagrado por Valter em 23/11/2026 — matéria de Macapá
+ * saiu publicada como editoria "boa_vista", e isso puxou por tabela uma foto
+ * real de Boa Vista pra ilustrar um fato de outro estado, dando a entender
+ * que aconteceu aqui — risco real de desinformação). O prompt de triagem
+ * (prompts.ts) já instrui a IA a nunca classificar fato de fora como
+ * "boa_vista"/"roraima", mas uma instrução de prompt pode falhar — por isso
+ * esta trava roda em CÓDIGO, depois da IA responder, igual à trava de
+ * editoria "brasil_mundo" que já existe em images.ts: nunca depende só da
+ * IA obedecer.
+ *
+ * Regra objetiva, sem depender de adivinhar geografia por palavra-chave
+ * (o que arriscaria falso positivo, tipo uma "Avenida Rio Branco" local):
+ * se a PRÓPRIA FONTE já está cadastrada como "brasil_mundo" (ou seja, é um
+ * veículo nacional/internacional, tipo G1/Agência Brasil — ver
+ * fontes_monitoradas.editoria_padrao), a matéria NUNCA pode sair como
+ * "boa_vista"/"roraima" — se a triagem tentar, o sistema corrige sozinho na
+ * hora e avisa o Valter na Central de Transparência, criando um registro de
+ * auditoria de toda vez que isso for barrado.
+ */
+const EDITORIAS_LOCAIS: Editoria[] = ["boa_vista", "roraima"];
+
+async function travarEditoriaForaDeRoraima(item: ItemBruto, resumo: ResumoGemini): Promise<void> {
+  if (item.editoriaPadrao !== "brasil_mundo") return;
+  if (!EDITORIAS_LOCAIS.includes(resumo.editoriaSugerida)) return;
+
+  const editoriaErrada = resumo.editoriaSugerida;
+  resumo.editoriaSugerida = "brasil_mundo";
+
+  await log("warning", "pipeline", "Trava de Geografia corrigiu classificação indevida pra editoria local", {
+    fonte: item.fonteNome,
+    url: item.url,
+    editoriaSugeridaPelaIA: editoriaErrada,
+  });
+
+  // Um aviso por fonte por dia é suficiente pra mostrar o padrão a Valter
+  // sem virar spam na Central de Transparência, caso isso se repita bastante
+  // numa mesma fonte no mesmo dia.
+  const marcador = `trava-geografia-${item.fonteId}-${new Date().toISOString().slice(0, 10)}`;
+  if (!(await jaInformouHoje("Editor-chefe", marcador))) {
+    await informar(
+      "Editor-chefe",
+      `Travei uma classificação errada antes de publicar: a triagem sugeriu "${editoriaErrada}" pra uma matéria vinda de "${item.fonteNome}" — uma fonte que já está cadastrada como nacional/internacional ("brasil_mundo"), não de Roraima. Troquei a editoria pra "brasil_mundo" automaticamente, pra matéria de fora nunca sair classificada como se fosse local (isso também evita usar foto real de Boa Vista pra ilustrar um fato de outro lugar).`,
+      { fonte: item.fonteNome, url: item.url, editoriaSugeridaPelaIA: editoriaErrada, marcador }
+    );
+  }
 }
 
 /**

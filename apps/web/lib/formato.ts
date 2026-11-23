@@ -12,11 +12,18 @@ export function tempoRelativo(iso: string | null): string {
 
 export function dataCompleta(iso: string | null): string {
   if (!iso) return "";
+  // Bug flagrado por Valter em 23/11/2026: faltava "timeZone" aqui, então a
+  // hora exibida usava o fuso do SERVIDOR (Vercel roda em UTC), não o fuso
+  // real de Boa Vista/Roraima (UTC-4) — por isso a maioria das matérias
+  // aparecia com a mesma hora "errada" (deslocada 4h pra frente do horário
+  // real em que foram publicadas). O dado salvo (data_publicacao) sempre
+  // esteve certo; só a exibição estava sem fuso horário definido.
   return new Date(iso).toLocaleDateString("pt-BR", {
     day: "2-digit",
     month: "long",
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: "America/Boa_Vista",
   });
 }
