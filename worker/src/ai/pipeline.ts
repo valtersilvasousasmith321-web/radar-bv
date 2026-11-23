@@ -73,7 +73,20 @@ function calcularCreditoPublico(fontePrimaria: string | null | undefined, fontes
   return juntarNomes(fontes.filter((f) => f.creditarPublicamente).map((f) => f.nome));
 }
 
-/** Triagem com Fallback em cascata (IA local -> Gemini -> Claude -> Groq -> OpenRouter -> Mistral -> Cohere) — compartilhada entre o caminho de fonte única e o multi-fonte. */
+/**
+ * Triagem com Fallback em cascata — IA local -> Gemini -> Groq -> OpenRouter
+ * -> Mistral -> Cohere -> Claude. Compartilhada entre o caminho de fonte
+ * única e o multi-fonte.
+ *
+ * Ordem invertida em 23/11/2026, a pedido do Valter ("eu não quero pagar
+ * não"): Claude é o ÚNICO provedor pago da bancada — todos os outros têm
+ * cota gratuita própria. Antes ele vinha logo depois do Gemini, então toda
+ * vez que o Gemini tropeçava (coisa comum no free tier) o sistema já ia
+ * gastando Claude antes de tentar as opções 100% grátis que ainda sobravam.
+ * Agora ele só é acionado se TODOS os gratuitos falharem no mesmo item —
+ * continua na bancada como último recurso (pra nunca travar a produção por
+ * completo), mas não é mais gasto por padrão.
+ */
 async function triarComCascata(item: ItemBruto): Promise<ResumoGemini | null> {
   let resumo = await triarComOllama(item);
 
@@ -82,33 +95,27 @@ async function triarComCascata(item: ItemBruto): Promise<ResumoGemini | null> {
   } else if (estaDisponivel("gemini")) {
     resumo = await triarComGemini(item);
   } else {
-    await log("info", "pipeline", "Gemini pulado (sem fôlego recente) — indo direto pro Claude", { url: item.url });
-  }
-
-  if (!resumo && estaDisponivel("claude")) {
-    await log("warning", "pipeline", "Gemini falhou/atingiu cota na triagem — acionando fallback Claude", { url: item.url });
-    resumo = await triarComClaude(item);
-  } else if (!resumo) {
-    await log("info", "pipeline", "Claude pulado (sem fôlego recente) — indo direto pro Groq", { url: item.url });
+    await log("info", "pipeline", "Gemini pulado (sem fôlego recente) — indo direto pro Groq", { url: item.url });
   }
 
   if (!resumo && estaDisponivel("groq")) {
-    await log("warning", "pipeline", "Claude falhou no fallback de triagem — acionando Groq", { url: item.url });
+    await log("warning", "pipeline", "Gemini falhou/atingiu cota na triagem — acionando fallback Groq", { url: item.url });
     resumo = await triarComGroqFallback(item);
   } else if (!resumo) {
     await log("info", "pipeline", "Groq pulado (sem fôlego recente) — indo direto pro OpenRouter", { url: item.url });
   }
 
   if (!resumo && estaDisponivel("openrouter")) {
+    await log("warning", "pipeline", "Groq falhou no fallback de triagem — acionando OpenRouter", { url: item.url });
     resumo = await triarComOpenRouterFallback(item);
   } else if (!resumo) {
     await log("info", "pipeline", "OpenRouter pulado (sem fôlego recente) — indo direto pro Mistral", { url: item.url });
   }
 
   // Mistral e Cohere (22/11/2026, a pedido do Valter — "ampliar a bancada
-  // de IA"): dois elos a mais no fim da cascata, cada um com sua própria
-  // cota gratuita independente — quanto mais longa a cascata, menor a
-  // chance de um apagão total travar a produção de notícia.
+  // de IA"): dois elos a mais na cascata, cada um com sua própria cota
+  // gratuita independente — quanto mais longa a cascata, menor a chance de
+  // um apagão total travar a produção de notícia.
   if (!resumo && estaDisponivel("mistral")) {
     resumo = await triarComMistralFallback(item);
   } else if (!resumo) {
@@ -117,6 +124,14 @@ async function triarComCascata(item: ItemBruto): Promise<ResumoGemini | null> {
 
   if (!resumo && estaDisponivel("cohere")) {
     resumo = await triarComCohereFallback(item);
+  } else if (!resumo) {
+    await log("info", "pipeline", "Cohere pulado (sem fôlego recente) — indo pro Claude (único provedor pago, último recurso)", { url: item.url });
+  }
+
+  // Claude por último: é o único provedor pago da bancada (ver nota acima).
+  if (!resumo && estaDisponivel("claude")) {
+    await log("warning", "pipeline", "Todos os provedores gratuitos falharam na triagem — acionando Claude (pago) como último recurso", { url: item.url });
+    resumo = await triarComClaude(item);
   }
 
   if (!resumo) return null; // sujeira de página, ou triagem falhou em todos os provedores
@@ -135,7 +150,14 @@ async function triarComCascata(item: ItemBruto): Promise<ResumoGemini | null> {
   return resumo;
 }
 
-/** Redação-Chefe com Fallback em cascata (Claude -> Gemini -> Groq -> OpenRouter -> Mistral -> Cohere) — fonte única. */
+/**
+ * Redação-Chefe com Fallback em cascata — Gemini -> Groq -> OpenRouter ->
+ * Mistral -> Cohere -> Claude — fonte única.
+ *
+ * Ordem invertida em 23/11/2026 (mesmo motivo da triagem acima): Claude é
+ * pago, todo o resto é grátis — ele só escreve a matéria quando os 5
+ * provedores gratuitos falharem todos pra esse item.
+ */
 async function redigirComCascata(paramsRedacao: {
   topicos: string[];
   fonteNome: string;
@@ -143,26 +165,11 @@ async function redigirComCascata(paramsRedacao: {
   editoriaSugerida: Editoria;
 }): Promise<{ materia: MateriaRedigida; origemIA: OrigemIA } | null> {
   let materia: MateriaRedigida | null = null;
-  let origemIA: OrigemIA = "claude";
+  let origemIA: OrigemIA = "gemini";
 
-  if (estaDisponivel("claude")) {
-    try {
-      materia = await redigirComClaude(paramsRedacao);
-    } catch (err: any) {
-      if (pareceErroDeCota(err)) await marcarIndisponivel("claude", String(err?.message ?? err));
-      await log("warning", "pipeline", "Claude falhou/atingiu cota — acionando fallback Gemini", {
-        fonte: paramsRedacao.fonteNome,
-        erro: String(err?.message ?? err),
-      });
-    }
-  } else {
-    await log("info", "pipeline", "Claude pulado na redação (sem fôlego recente) — indo direto pro Gemini", { fonte: paramsRedacao.fonteNome });
-  }
-
-  if (!materia && estaDisponivel("gemini")) {
-    origemIA = "gemini";
+  if (estaDisponivel("gemini")) {
     materia = await redigirComGeminiFallback(paramsRedacao);
-  } else if (!materia) {
+  } else {
     await log("info", "pipeline", "Gemini pulado na redação (sem fôlego recente) — indo direto pro Groq", { fonte: paramsRedacao.fonteNome });
   }
 
@@ -181,38 +188,43 @@ async function redigirComCascata(paramsRedacao: {
     materia = await redigirComMistralFallback(paramsRedacao);
   }
 
-  if (!materia) {
+  if (!materia && estaDisponivel("cohere")) {
     origemIA = "cohere";
     materia = await redigirComCohereFallback(paramsRedacao);
+  }
+
+  // Claude por último: único provedor pago da bancada (ver nota acima).
+  if (!materia && estaDisponivel("claude")) {
+    try {
+      origemIA = "claude";
+      materia = await redigirComClaude(paramsRedacao);
+    } catch (err: any) {
+      if (pareceErroDeCota(err)) await marcarIndisponivel("claude", String(err?.message ?? err));
+      await log("warning", "pipeline", "Todos os provedores gratuitos falharam na redação — Claude (pago, último recurso) também falhou/atingiu cota", {
+        fonte: paramsRedacao.fonteNome,
+        erro: String(err?.message ?? err),
+      });
+    }
   }
 
   if (!materia) return null;
   return { materia, origemIA };
 }
 
-/** Redação-Chefe com Fallback em cascata — Curadoria Multi-Fonte (mesma ordem, prompt diferente). */
+/**
+ * Redação-Chefe com Fallback em cascata — Curadoria Multi-Fonte (mesma
+ * ordem invertida de 23/11/2026 da redação de fonte única acima, prompt
+ * diferente): Gemini -> Groq -> OpenRouter -> Mistral -> Cohere -> Claude.
+ */
 async function redigirMultiFonteComCascata(paramsRedacao: {
   fontes: Array<{ nome: string; topicos: string[] }>;
   editoriaSugerida: Editoria;
 }): Promise<{ materia: MateriaRedigida; origemIA: OrigemIA } | null> {
   let materia: MateriaRedigida | null = null;
-  let origemIA: OrigemIA = "claude";
+  let origemIA: OrigemIA = "gemini";
   const rotulo = paramsRedacao.fontes.map((f) => f.nome).join(" + ");
 
-  if (estaDisponivel("claude")) {
-    try {
-      materia = await redigirMultiFonteComClaude(paramsRedacao);
-    } catch (err: any) {
-      if (pareceErroDeCota(err)) await marcarIndisponivel("claude", String(err?.message ?? err));
-      await log("warning", "pipeline", "Claude falhou/atingiu cota na redação multi-fonte — acionando fallback Gemini", {
-        fontes: rotulo,
-        erro: String(err?.message ?? err),
-      });
-    }
-  }
-
-  if (!materia && estaDisponivel("gemini")) {
-    origemIA = "gemini";
+  if (estaDisponivel("gemini")) {
     materia = await redigirMultiFonteComGeminiFallback(paramsRedacao);
   }
 
@@ -231,9 +243,23 @@ async function redigirMultiFonteComCascata(paramsRedacao: {
     materia = await redigirMultiFonteComMistralFallback(paramsRedacao);
   }
 
-  if (!materia) {
+  if (!materia && estaDisponivel("cohere")) {
     origemIA = "cohere";
     materia = await redigirMultiFonteComCohereFallback(paramsRedacao);
+  }
+
+  // Claude por último: único provedor pago da bancada.
+  if (!materia && estaDisponivel("claude")) {
+    try {
+      origemIA = "claude";
+      materia = await redigirMultiFonteComClaude(paramsRedacao);
+    } catch (err: any) {
+      if (pareceErroDeCota(err)) await marcarIndisponivel("claude", String(err?.message ?? err));
+      await log("warning", "pipeline", "Todos os provedores gratuitos falharam na redação multi-fonte — Claude (pago, último recurso) também falhou/atingiu cota", {
+        fontes: rotulo,
+        erro: String(err?.message ?? err),
+      });
+    }
   }
 
   if (!materia) return null;
