@@ -96,13 +96,13 @@ export function CarrosselDestaques({ itens }: { itens: Noticia[] }) {
         {atual.subtitulo && <p className="text-[15px] text-slate-500 mt-2.5 leading-relaxed">{atual.subtitulo}</p>}
         <div className="flex items-center gap-2 mt-4 text-xs text-slate-400 flex-wrap">
           <span className="bg-slate-100 text-slate-700 font-semibold px-2 py-0.5 rounded-full">
-            Redigido por {ORIGEM_IA_LABEL[atual.origem_ia]}
+            Redação IA Radar BV (Modelo {ORIGEM_IA_LABEL[atual.origem_ia]})
           </span>
           {atual.fonte_credito && (
             <>
               <span>•</span>
               <a href={atual.fonte_url_original} className="hover:text-navy hover:underline">
-                Fonte: {atual.fonte_credito}
+                Com informações de: {atual.fonte_credito}
               </a>
             </>
           )}

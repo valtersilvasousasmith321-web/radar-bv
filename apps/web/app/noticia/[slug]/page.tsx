@@ -78,12 +78,11 @@ export default async function PaginaNoticia({ params }: ParametrosRota) {
 
           <div className="mt-6 bg-white border border-slate-200 rounded-[10px] px-4.5 py-3.5 flex flex-wrap items-center gap-2.5 text-[13px] text-slate-600">
             <span className="bg-slate-100 text-navy font-bold px-2.5 py-1 rounded-full text-xs">
-              Redigido por {ORIGEM_IA_LABEL[noticia.origem_ia]}
+              Redação IA Radar BV (Modelo {ORIGEM_IA_LABEL[noticia.origem_ia]})
             </span>
-            <span>a partir de fatos apurados pelo Gemini</span>
             <span className="text-slate-300">•</span>
             <span>
-              Fonte original:{" "}
+              Com informações de:{" "}
               <a href={noticia.fonte_url_original} className="text-navy font-semibold hover:underline">
                 {noticia.fonte_credito}
               </a>
