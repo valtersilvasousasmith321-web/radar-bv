@@ -63,13 +63,16 @@ async function processarUmaDica(dica: DicaBairro): Promise<void> {
     }
 
     const { materia } = resultado;
-    const contextoMateria = [materia.titulo, materia.subtitulo, ...(materia.tags ?? [])].join(" ");
 
     // Se o morador mandou foto, usa direto (com crédito claro); senão, cai no
     // mesmo banco de imagens de segurança usado pelas matérias normais.
     const imagem = dica.midia_url
       ? { url: dica.midia_url, credito: "Leitor via WhatsApp", eFallback: false }
-      : await obterImagemParaMateria("neighborhood street brazil", materia.editoria, contextoMateria);
+      : await obterImagemParaMateria("neighborhood street brazil", materia.editoria, {
+          titulo: materia.titulo,
+          subtitulo: materia.subtitulo ?? "",
+          tags: materia.tags ?? [],
+        });
 
     const slug = gerarSlug(materia.titulo);
 

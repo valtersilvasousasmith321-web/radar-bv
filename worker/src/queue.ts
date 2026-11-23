@@ -86,8 +86,11 @@ export async function agendarPublicacao(resultado: ResultadoPipeline, fonteId: s
     return;
   }
 
-  const contextoMateria = [materia.titulo, materia.subtitulo, ...(materia.tags ?? [])].join(" ");
-  const imagem = await obterImagemParaMateria(palavraChaveImagem, materia.editoria, contextoMateria);
+  const imagem = await obterImagemParaMateria(palavraChaveImagem, materia.editoria, {
+    titulo: materia.titulo,
+    subtitulo: materia.subtitulo ?? "",
+    tags: materia.tags ?? [],
+  });
 
   // Camada 2 — IA leve, sempre roda (só ela pega erro de sentido/tom/foto
   // incoerente). Se reprovar, a matéria não é perdida: cai como rascunho

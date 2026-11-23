@@ -2,8 +2,15 @@ import fetch from "node-fetch";
 import { config } from "./config.js";
 import { supabase } from "./db.js";
 import { log } from "./logger.js";
-import { escolherMelhorImagem, type CandidatoImagem } from "./ai/editorImagens.js";
+import { escolherMelhorImagem, validarImagemBancoProprio, type CandidatoImagem } from "./ai/editorImagens.js";
 import type { Editoria, ResultadoImagem } from "./types.js";
+
+/** Contexto estruturado da matéria, usado tanto pro casamento de tags quanto pro Verificador de Imagem (precisa de título/subtítulo legíveis, não um blob achatado). */
+export interface ContextoImagemMateria {
+  titulo: string;
+  subtitulo: string;
+  tags: string[];
+}
 
 interface UnsplashResultado {
   results: Array<{ urls: { regular: string }; user: { name: string }; alt_description: string | null; description: string | null }>;
@@ -119,7 +126,11 @@ function normalizar(texto: string): string {
  * sempre preferível a uma foto de banco de imagens internacional — que
  * nunca vai mostrar a rua, o prédio ou a viatura de verdade de Boa Vista.
  */
-async function buscarImagemBancoProprio(textoParaCasar: string, editoria: Editoria): Promise<ResultadoImagem | null> {
+async function buscarImagemBancoProprio(
+  textoParaCasar: string,
+  editoria: Editoria,
+  materia: ContextoImagemMateria,
+): Promise<ResultadoImagem | null> {
   // Busca em TODO o banco próprio, não só na editoria da matéria: uma
   // matéria sobre prisão/drogas pode sair classificada como "roraima" em
   // vez de "policia", mas o conteúdo de verdade é policial — e a foto da
@@ -131,7 +142,7 @@ async function buscarImagemBancoProprio(textoParaCasar: string, editoria: Editor
   if (error || !data || data.length === 0) return null;
 
   const termoBusca = normalizar(textoParaCasar);
-  const candidatos = data.filter((img) => {
+  const candidatosPorTag = data.filter((img) => {
     const tags: string[] = img.tags ?? [];
     return tags.some((tag) => termoBusca.includes(normalizar(tag)));
   });
@@ -139,40 +150,58 @@ async function buscarImagemBancoProprio(textoParaCasar: string, editoria: Editor
   // Acharam foto(s) cujo tema bate de verdade com a matéria — nesse caso,
   // prioriza as que também são da mesma editoria (mais prováveis de ser o
   // contexto certo), mas aceita qualquer uma que bateu a tag.
-  if (candidatos.length > 0) {
-    const daMesmaEditoria = candidatos.filter((img) => img.editoria === editoria);
-    const pool = daMesmaEditoria.length > 0 ? daMesmaEditoria : candidatos;
-    const escolhida = pool[Math.floor(Math.random() * pool.length)];
-    return { url: escolhida.url, credito: "Foto: Radar BV", eFallback: false };
+  let pool: typeof data;
+  if (candidatosPorTag.length > 0) {
+    const daMesmaEditoria = candidatosPorTag.filter((img) => img.editoria === editoria);
+    pool = daMesmaEditoria.length > 0 ? daMesmaEditoria : candidatosPorTag;
+  } else {
+    // Nenhuma tag bateu: como última tentativa antes de ir pro banco de
+    // imagens livres, usa qualquer foto da própria editoria da matéria
+    // (continua sendo mais fiel que uma foto internacional aleatória).
+    pool = data.filter((img) => img.editoria === editoria);
+  }
+  if (pool.length === 0) return null;
+
+  // Verificador de Imagem (item novo, 22/11/2026): uma foto do banco próprio
+  // é real e reconhecível (prédio, viatura, hospital com nome) — usar a
+  // errada não é "imagem meia-boca", é afirmar visualmente que o fato
+  // aconteceu ali. Por isso, antes de aceitar a escolha, testa cada
+  // candidata do pool (em ordem aleatória, até achar uma aprovada ou
+  // esgotar o pool) contra o conteúdo real da matéria — só então vale;
+  // se NENHUMA passar, volta null e o fluxo normal cai pro banco de
+  // imagens livres (Unsplash/Pixabay/Pexels), que é sempre mais seguro
+  // que forçar uma foto real que não combina de verdade.
+  const embaralhado = [...pool].sort(() => Math.random() - 0.5);
+  for (const candidata of embaralhado) {
+    const verificacao = await validarImagemBancoProprio(candidata.descricao ?? "", { ...materia, editoria });
+    if (verificacao.aprovado) {
+      return { url: candidata.url, credito: "Foto: Radar BV", eFallback: false };
+    }
   }
 
-  // Nenhuma tag bateu: como última tentativa antes de ir pro banco de
-  // imagens livres, usa qualquer foto da própria editoria da matéria
-  // (continua sendo mais fiel que uma foto internacional aleatória).
-  const daEditoria = data.filter((img) => img.editoria === editoria);
-  if (daEditoria.length === 0) return null;
-
-  const escolhida = daEditoria[Math.floor(Math.random() * daEditoria.length)];
-  return { url: escolhida.url, credito: "Foto: Radar BV", eFallback: false };
+  return null;
 }
 
 /**
  * Banco de Imagens de Segurança (Regra de Ouro — item 5), com o Editor de
  * Imagens (item 8) embutido na busca de banco livre: primeiro tenta uma
- * foto PRÓPRIA cadastrada pro assunto (mais fiel à realidade local); se não
- * achar nenhuma, busca um PUNHADO de candidatas livres de direitos
- * (Unsplash -> Pixabay -> Pexels, parando no primeiro banco que trouxer
- * resultado) e deixa a IA escolher, entre elas, a que combina de verdade
- * com o conteúdo da matéria — não só a primeira que bateu com a
- * palavra-chave solta; se nenhuma das três encontrar ou tudo falhar, aplica
- * automaticamente a imagem padrão pré-cadastrada da categoria.
+ * foto PRÓPRIA cadastrada pro assunto (mais fiel à realidade local), já
+ * passando pelo Verificador de Imagem (item novo, 22/11/2026 — ver
+ * validarImagemBancoProprio em editorImagens.ts) antes de aceitar, porque é
+ * uma foto real e reconhecível; se não achar nenhuma aprovada, busca um
+ * PUNHADO de candidatas livres de direitos (Unsplash -> Pixabay -> Pexels,
+ * parando no primeiro banco que trouxer resultado) e deixa a IA escolher,
+ * entre elas, a que combina de verdade com o conteúdo da matéria — não só a
+ * primeira que bateu com a palavra-chave solta; se nenhuma das três
+ * encontrar ou tudo falhar, aplica automaticamente a imagem padrão
+ * pré-cadastrada da categoria.
  */
 export async function obterImagemParaMateria(
   palavraChave: string,
   editoria: Editoria,
-  contextoMateria?: string,
+  materia: ContextoImagemMateria,
 ): Promise<ResultadoImagem> {
-  const textoParaCasar = [palavraChave, contextoMateria].filter(Boolean).join(" ");
+  const textoParaCasar = [palavraChave, materia.titulo, materia.subtitulo, ...materia.tags].filter(Boolean).join(" ");
 
   // Flagrado na auditoria de 21/11/2026: o Banco de Imagens Próprias (fotos
   // reais de Boa Vista/Roraima) casava pela TAG batendo em qualquer parte do
@@ -181,9 +210,11 @@ export async function obterImagemParaMateria(
   // de qualquer cidade do Brasil) podia sair ilustrada com a foto real da
   // Prefeitura de Boa Vista, dando a entender que o fato aconteceu aqui.
   // Editoria "brasil_mundo" é, por definição, sobre lugar que NÃO é
-  // Roraima — nunca pode usar uma foto real local.
+  // Roraima — nunca pode usar uma foto real local. Essa exclusão continua
+  // valendo mesmo com o Verificador de Imagem abaixo (defesa em camadas:
+  // uma regra fixa que nunca depende de IA estar disponível).
   if (editoria !== "brasil_mundo") {
-    const viaBancoProprio = await buscarImagemBancoProprio(textoParaCasar, editoria);
+    const viaBancoProprio = await buscarImagemBancoProprio(textoParaCasar, editoria, materia);
     if (viaBancoProprio) return viaBancoProprio;
   }
 

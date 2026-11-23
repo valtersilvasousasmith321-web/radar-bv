@@ -140,3 +140,133 @@ export async function escolherMelhorImagem(candidatos: CandidatoImagem[], contex
 
   return candidatos[indice];
 }
+
+/**
+ * Verificador de Imagem (item novo, 22/11/2026 — flagrado por Valter: matéria
+ * de "Brasil & Mundo" sobre incêndio na Indonésia, terremoto no Peru, FBI
+ * nos EUA etc. saindo ilustrada com a foto REAL do 5º Distrito de Polícia de
+ * Boa Vista). O Banco de Imagens Próprias (buscarImagemBancoProprio em
+ * images.ts) já tem uma regra rígida excluindo a editoria "brasil_mundo" —
+ * mas aquele caso específico veio de um worker rodando código antigo, de
+ * antes dessa exclusão existir (reforça por que esse Verificador é uma
+ * segunda camada independente, e não só mais uma regra escrita à mão: regra
+ * fixa falha quando o código não foi atualizado a tempo, ou quando a
+ * editoria vem rotulada errado; uma IA olhando o par foto+matéria pega isso
+ * de qualquer jeito).
+ *
+ * Diferença para o Editor de Imagens acima: aquele ESCOLHE a melhor entre
+ * candidatas de banco livre (fotos genéricas, trocar uma pela outra é barato
+ * e nunca embaraçoso). Este AQUI é chamado só quando a foto é uma foto REAL
+ * E RECONHECÍVEL de um local/objeto específico de Boa Vista/Roraima (prédio
+ * público, viatura, hospital nomeado) — nesse caso usar a foto errada não é
+ * só "uma imagem meia-boca", é afirmar visualmente que o fato aconteceu ali,
+ * quando não aconteceu. Por isso a régua é mais rígida: só aprova se a
+ * matéria for GENUINAMENTE sobre aquele local/órgão específico.
+ */
+function montarPromptVerificacao(materia: { titulo: string; subtitulo: string; editoria: string; tags: string[] }, descricaoFoto: string): string {
+  return `Você é o Verificador de Imagem do Radar BV, portal de notícias de Boa Vista/Roraima. Uma foto REAL E ESPECÍFICA — não uma foto genérica de banco de imagens, mas uma foto de verdade de um prédio, viatura, hospital ou outro local/órgão reconhecível de Boa Vista/Roraima — foi escolhida pra ilustrar a matéria abaixo.
+
+Por ser uma foto real e reconhecível, ela só pode ser usada se a matéria for GENUINAMENTE sobre esse local/órgão/tema específico mostrado na foto — nunca como ilustração "parecida", "do mesmo assunto geral" ou "mais ou menos relacionada". Em especial: REPROVE sempre que a matéria tratar de um fato ocorrido fora de Roraima (outro estado brasileiro, ou outro país) — uma foto real daqui nunca pode ilustrar um fato que aconteceu em outro lugar, mesmo que o tema pareça parecido (ex.: notícia de polícia em outro país/estado NUNCA pode usar foto de uma delegacia real de Boa Vista).
+
+MATÉRIA:
+Título: ${materia.titulo}
+Subtítulo: ${materia.subtitulo}
+Editoria: ${materia.editoria}
+Tags: ${materia.tags.join(", ") || "(nenhuma)"}
+
+FOTO ESCOLHIDA (descrição real e específica do que ela mostra):
+"${descricaoFoto}"
+
+A matéria é genuinamente sobre o que essa foto mostra? Responda SOMENTE com um JSON válido, sem comentários, sem markdown, no formato exato:
+{"aprovado": boolean, "motivo": "string curta"}`;
+}
+
+async function perguntarGroqVerificacao(prompt: string): Promise<{ aprovado: boolean; motivo?: string } | null> {
+  if (!groq) return null;
+  try {
+    const resposta = await groq.chat.completions.create({
+      model: "openai/gpt-oss-120b",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.1,
+    });
+    const texto = resposta.choices[0]?.message?.content ?? "";
+    if (!texto.trim()) return null;
+    return extrairJson<{ aprovado: boolean; motivo?: string }>(texto);
+  } catch (err: any) {
+    if (pareceErroDeCota(err)) await marcarIndisponivel("groq", String(err?.message ?? err));
+    await log("warning", "editorImagens", "Falha ao verificar imagem via Groq", { erro: String(err?.message ?? err) });
+    return null;
+  }
+}
+
+async function perguntarGeminiVerificacao(prompt: string): Promise<{ aprovado: boolean; motivo?: string } | null> {
+  try {
+    const modelo = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
+    const resultado = await modelo.generateContent(prompt);
+    const texto = resultado.response.text();
+    if (!texto.trim()) return null;
+    return extrairJson<{ aprovado: boolean; motivo?: string }>(texto);
+  } catch (err: any) {
+    if (pareceErroDeCota(err)) await marcarIndisponivel("gemini", String(err?.message ?? err));
+    await log("warning", "editorImagens", "Falha ao verificar imagem via Gemini", { erro: String(err?.message ?? err) });
+    return null;
+  }
+}
+
+async function perguntarClaudeVerificacao(prompt: string): Promise<{ aprovado: boolean; motivo?: string } | null> {
+  try {
+    const resposta = await anthropic.messages.create({
+      model: "claude-haiku-5-5",
+      max_tokens: 200,
+      output_config: { effort: "low" },
+      messages: [{ role: "user", content: prompt }],
+    } as any);
+    const bloco = resposta.content.find((b: any) => b.type === "text");
+    const texto = bloco && (bloco as any).type === "text" ? (bloco as any).text : "";
+    if (!texto.trim()) return null;
+    return extrairJson<{ aprovado: boolean; motivo?: string }>(texto);
+  } catch (err: any) {
+    if (pareceErroDeCota(err)) await marcarIndisponivel("claude", String(err?.message ?? err));
+    await log("warning", "editorImagens", "Falha ao verificar imagem via Claude", { erro: String(err?.message ?? err) });
+    return null;
+  }
+}
+
+/**
+ * Roda a cascata (Groq -> Gemini -> Claude) pra validar uma foto do Banco de
+ * Imagens Próprias contra o conteúdo real da matéria. Fail-open: se as 3
+ * IAs falharem, aprova por padrão (nunca trava a publicação por causa do
+ * Verificador estar indisponível) — mas ISSO nunca é o único filtro: a
+ * exclusão rígida de "brasil_mundo" em images.ts continua valendo sempre,
+ * mesmo com o Verificador fora do ar.
+ */
+export async function validarImagemBancoProprio(
+  descricaoFoto: string,
+  materia: { titulo: string; subtitulo: string; editoria: string; tags: string[] }
+): Promise<{ aprovado: boolean; motivo?: string }> {
+  const prompt = montarPromptVerificacao(materia, descricaoFoto);
+
+  let resultado: { aprovado: boolean; motivo?: string } | null = null;
+
+  if (estaDisponivel("groq")) resultado = await perguntarGroqVerificacao(prompt);
+  if (!resultado && estaDisponivel("gemini")) resultado = await perguntarGeminiVerificacao(prompt);
+  if (!resultado && estaDisponivel("claude")) resultado = await perguntarClaudeVerificacao(prompt);
+
+  if (!resultado) {
+    await log("warning", "editorImagens", "Verificador de Imagem indisponível neste ciclo — foto do banco próprio aprovada por padrão (fail-open)", {
+      descricaoFoto,
+      titulo: materia.titulo,
+    });
+    return { aprovado: true };
+  }
+
+  if (!resultado.aprovado) {
+    await log("info", "editorImagens", "Verificador de Imagem reprovou foto do banco próprio — buscando outra opção", {
+      descricaoFoto,
+      titulo: materia.titulo,
+      motivo: resultado.motivo,
+    });
+  }
+
+  return resultado;
+}
