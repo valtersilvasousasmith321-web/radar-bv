@@ -2,7 +2,7 @@ import fetch from "node-fetch";
 import { config } from "./config.js";
 import { supabase } from "./db.js";
 import { log } from "./logger.js";
-import { escolherMelhorImagem, validarImagemBancoProprio, type CandidatoImagem } from "./ai/editorImagens.js";
+import { escolherMelhorImagem, validarImagemBancoProprio, sugerirPalavrasChaveAlternativas, type CandidatoImagem } from "./ai/editorImagens.js";
 import type { Editoria, ResultadoImagem } from "./types.js";
 
 /** Contexto estruturado da matéria, usado tanto pro casamento de tags quanto pro Verificador de Imagem (precisa de título/subtítulo legíveis, não um blob achatado). */
@@ -218,15 +218,55 @@ export async function obterImagemParaMateria(
     if (viaBancoProprio) return viaBancoProprio;
   }
 
+  const viaBancoLivre = await buscarMelhorCandidatoLivre(palavraChave, textoParaCasar);
+  if (viaBancoLivre) return viaBancoLivre;
+
+  // Pesquisador de Imagem (item novo, 22/11/2026 — pedido de Valter: "se não
+  // achasse a imagem, achasse algo compatível"): a primeira palavra-chave não
+  // trouxe nada de bom (zero candidatas, ou a IA disse que nenhuma combinava
+  // de verdade) — antes de desistir pro fallback institucional genérico,
+  // pede à IA 2-3 ângulos de busca diferentes a partir do conteúdo real da
+  // matéria e tenta cada um neles nos mesmos bancos livres, parando no
+  // primeiro que trouxer uma escolha confiável.
+  const alternativas = await sugerirPalavrasChaveAlternativas(
+    { titulo: materia.titulo, subtitulo: materia.subtitulo, tags: materia.tags },
+    palavraChave,
+  );
+  for (const alternativa of alternativas) {
+    const textoParaCasarAlternativo = [alternativa, materia.titulo, materia.subtitulo, ...materia.tags].filter(Boolean).join(" ");
+    const viaAlternativa = await buscarMelhorCandidatoLivre(alternativa, textoParaCasarAlternativo);
+    if (viaAlternativa) {
+      await log("info", "images", "Pesquisador de Imagem achou uma foto compatível numa busca alternativa", {
+        palavraChaveOriginal: palavraChave,
+        palavraChaveUsada: alternativa,
+      });
+      return viaAlternativa;
+    }
+  }
+
+  await log("info", "images", "Nenhuma imagem livre encontrada (nem com buscas alternativas) — usando fallback de categoria", {
+    palavraChave,
+    editoria,
+  });
+  return buscarImagemFallback(editoria);
+}
+
+/**
+ * Busca candidatas de banco livre (Unsplash -> Pixabay -> Pexels) com UMA
+ * palavra-chave e deixa o Editor de Imagens escolher a melhor. Só devolve
+ * resultado quando há candidatas E a escolha foi CONFIÁVEL (a IA realmente
+ * achou uma que combina) — devolve null nos outros casos, pra quem chamou
+ * decidir se tenta outro ângulo de busca em vez de aceitar um palpite fraco.
+ */
+async function buscarMelhorCandidatoLivre(palavraChave: string, textoParaCasar: string): Promise<ResultadoImagem | null> {
   let candidatos = await buscarCandidatosUnsplash(palavraChave);
   if (candidatos.length === 0) candidatos = await buscarCandidatosPixabay(palavraChave);
   if (candidatos.length === 0) candidatos = await buscarCandidatosPexels(palavraChave);
 
-  if (candidatos.length > 0) {
-    const escolhida = await escolherMelhorImagem(candidatos, textoParaCasar);
-    return { url: escolhida.url, credito: escolhida.credito, eFallback: false };
-  }
+  if (candidatos.length === 0) return null;
 
-  await log("info", "images", "Nenhuma imagem livre encontrada — usando fallback de categoria", { palavraChave, editoria });
-  return buscarImagemFallback(editoria);
+  const { escolhida, confiavel } = await escolherMelhorImagem(candidatos, textoParaCasar);
+  if (!confiavel) return null;
+
+  return { url: escolhida.url, credito: escolhida.credito, eFallback: false };
 }
