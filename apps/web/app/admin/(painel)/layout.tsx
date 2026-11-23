@@ -7,6 +7,7 @@ const ITENS_NAV = [
   { href: "/admin", label: "Dashboard" },
   { href: "/admin/noticias", label: "Notícias" },
   { href: "/admin/dicas", label: "Dicas dos Leitores" },
+  { href: "/admin/ouvidoria", label: "Ouvidoria" },
   { href: "/admin/fontes", label: "Fontes" },
   { href: "/admin/banners", label: "Banners" },
   { href: "/admin/whatsapp", label: "WhatsApp" },

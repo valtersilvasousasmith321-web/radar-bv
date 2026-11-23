@@ -9,6 +9,7 @@ import BotaoCompartilhar from "@/components/BotaoCompartilhar";
 import { CardNoticiaCompacto } from "@/components/CardNoticia";
 import RegistrarVisualizacao from "@/components/RegistrarVisualizacao";
 import Infografico from "@/components/Infografico";
+import FormularioOuvidoria from "@/components/FormularioOuvidoria";
 import { getBanner, getNoticiaPorSlug, getNoticiasRelacionadas } from "@/lib/data";
 import { LINK_GRUPO_WHATSAPP } from "@/lib/contatos";
 import { NOME_EDITORIA, ORIGEM_IA_LABEL } from "@/lib/types";
@@ -62,6 +63,19 @@ export default async function PaginaNoticia({ params }: ParametrosRota) {
           <h1 className="font-display text-[36px] font-bold text-navy leading-tight">{noticia.titulo}</h1>
           {noticia.subtitulo && <p className="text-lg text-slate-500 mt-3.5 leading-relaxed">{noticia.subtitulo}</p>}
 
+          {noticia.correcoes?.length > 0 && (
+            <div className="mt-5 flex flex-col gap-2">
+              {noticia.correcoes.map((c, i) => (
+                <div key={i} className="bg-amber-50 border border-amber-300 text-amber-900 text-sm rounded-md px-4 py-3">
+                  <span className="font-bold uppercase text-xs tracking-wide">
+                    Correção ({dataCompleta(c.data)}):
+                  </span>{" "}
+                  {c.texto}
+                </div>
+              ))}
+            </div>
+          )}
+
           <div className="mt-6 bg-white border border-slate-200 rounded-[10px] px-4.5 py-3.5 flex flex-wrap items-center gap-2.5 text-[13px] text-slate-600">
             <span className="bg-slate-100 text-navy font-bold px-2.5 py-1 rounded-full text-xs">
               Redigido por {ORIGEM_IA_LABEL[noticia.origem_ia]}
@@ -107,12 +121,13 @@ export default async function PaginaNoticia({ params }: ParametrosRota) {
             ))}
           </div>
 
-          <div className="mt-8 pt-6 border-t border-slate-200 flex items-center gap-3">
+          <div className="mt-8 pt-6 border-t border-slate-200 flex items-center gap-4 flex-wrap">
             <BotaoCompartilhar
               titulo={noticia.titulo}
               url={`https://www.radarbv.com.br/noticia/${noticia.slug}`}
               className="bg-esmeralda text-white font-semibold text-[13px] px-4 py-2 rounded-full"
             />
+            <FormularioOuvidoria noticiaId={noticia.id} />
           </div>
 
           {relacionadas.length > 0 && (

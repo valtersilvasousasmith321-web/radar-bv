@@ -1,4 +1,4 @@
-import type { Editoria, OrigemIA } from "./types";
+import type { CorrecaoNota, Editoria, OrigemIA } from "./types";
 
 export type StatusNoticia = "rascunho" | "agendado" | "publicado" | "erro" | "removido";
 
@@ -16,6 +16,7 @@ export interface Noticia {
   imagem_url: string | null;
   imagem_credito: string | null;
   imagem_e_fallback: boolean;
+  correcoes: CorrecaoNota[];
   fonte_id: string | null;
   fonte_url_original: string;
   fonte_credito: string | null;
@@ -90,4 +91,19 @@ export interface Dica {
   noticia_id: string | null;
   criado_em: string;
   processado_em: string | null;
+}
+
+export type StatusReclamacao = "pendente" | "respondida" | "arquivada";
+
+/** Reclamação/apontamento de erro enviado pelo leitor (item 21 — Ouvidoria) */
+export interface Reclamacao {
+  id: string;
+  noticia_id: string | null;
+  nome: string | null;
+  email: string | null;
+  mensagem: string;
+  status: StatusReclamacao;
+  resposta_admin: string | null;
+  criado_em: string;
+  respondido_em: string | null;
 }

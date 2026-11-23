@@ -58,6 +58,13 @@ do $$ begin
   create type status_dica as enum ('pendente', 'processada', 'descartada');
 exception when duplicate_object then null; end $$;
 
+do $$ begin
+  -- Ouvidoria/correção pública (item 21 do plano): status do atendimento
+  -- do relato do leitor — não confundir com status_dica (que é sobre
+  -- virar matéria nova; aqui é reclamação/apontamento de erro).
+  create type status_reclamacao as enum ('pendente', 'respondida', 'arquivada');
+exception when duplicate_object then null; end $$;
+
 -- ----------------------------------------------------------------------------
 -- fontes_monitoradas: de onde o coletor busca notícias + Trava de Silêncio
 -- ----------------------------------------------------------------------------
@@ -108,6 +115,7 @@ create table if not exists noticias (
   imagem_credito      text,                        -- crédito Unsplash/Pexels ou "fallback"
   imagem_e_fallback   boolean not null default false,
   infografico         jsonb,                       -- item 18: gráfico/linha do tempo gerado pelo Infografista (null = sem infográfico)
+  correcoes           jsonb not null default '[]', -- item 21: histórico de notas de correção pública [{data, texto}]
   fonte_id            uuid references fontes_monitoradas(id) on delete set null,
   fonte_url_original  text not null,
   fonte_credito       text,                        -- nome exibido da fonte original
@@ -295,6 +303,28 @@ create table if not exists dicas_bairro (
 
 create index if not exists idx_dicas_status on dicas_bairro (status);
 create index if not exists idx_dicas_criado_em on dicas_bairro (criado_em desc);
+
+-- ----------------------------------------------------------------------------
+-- reclamacoes_ouvidoria: Ouvidoria/correção pública (item 21) — canal pro
+-- leitor apontar erro numa matéria (ou reclamação geral do portal). Pode
+-- não estar ligado a nenhuma matéria específica (noticia_id null = relato
+-- geral sobre o portal). Puramente mecânico, sem IA nenhuma envolvida —
+-- o Valter lê e decide, igual um jornal de verdade faz com carta do leitor.
+-- ----------------------------------------------------------------------------
+create table if not exists reclamacoes_ouvidoria (
+  id            uuid primary key default gen_random_uuid(),
+  noticia_id    uuid references noticias(id) on delete set null,
+  nome          text,                         -- opcional, leitor pode mandar anônimo
+  email         text,                         -- opcional, só pra Valter responder se quiser
+  mensagem      text not null,
+  status        status_reclamacao not null default 'pendente',
+  resposta_admin text,                        -- anotação interna de como foi resolvido
+  criado_em     timestamptz not null default now(),
+  respondido_em timestamptz
+);
+
+create index if not exists idx_reclamacoes_status on reclamacoes_ouvidoria (status);
+create index if not exists idx_reclamacoes_criado_em on reclamacoes_ouvidoria (criado_em desc);
 
 -- Dedup do resumo diário — garante 1 envio por destino por dia mesmo se o
 -- worker reiniciar ou o cron disparar 2x por engano.

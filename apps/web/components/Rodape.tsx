@@ -22,6 +22,7 @@ export default function Rodape() {
             <Link href="/editoria/policia" className="hover:underline">Polícia</Link>
             <Link href="/editoria/politica" className="hover:underline">Política</Link>
             <Link href="/quem-somos" className="hover:underline">Quem somos</Link>
+            <Link href="/ouvidoria" className="hover:underline">Ouvidoria</Link>
           </div>
         </div>
         <div className="flex-1 min-w-[160px]">

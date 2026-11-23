@@ -18,7 +18,7 @@ export default async function PaginaDashboard() {
         <p className="text-sm text-slate-500 mt-1">Visão geral da redação automatizada.</p>
       </div>
 
-      <div className="grid grid-cols-3 gap-5">
+      <div className="grid grid-cols-4 gap-5">
         <div className="bg-white rounded-xl border border-slate-200 p-5">
           <div className="text-3xl font-bold text-navy">{resumo.publicadas}</div>
           <div className="text-sm text-slate-500 mt-1">Notícias publicadas</div>
@@ -31,6 +31,12 @@ export default async function PaginaDashboard() {
           <div className="text-3xl font-bold text-slate-400">{resumo.rascunhos}</div>
           <div className="text-sm text-slate-500 mt-1">Rascunhos</div>
         </div>
+        <Link href="/admin/ouvidoria" className="bg-white rounded-xl border border-slate-200 p-5 hover:border-esmeralda transition-colors">
+          <div className={`text-3xl font-bold ${resumo.reclamacoesPendentes > 0 ? "text-amber-600" : "text-slate-400"}`}>
+            {resumo.reclamacoesPendentes}
+          </div>
+          <div className="text-sm text-slate-500 mt-1">Ouvidoria pendente</div>
+        </Link>
       </div>
 
       <div className="grid grid-cols-2 gap-6">

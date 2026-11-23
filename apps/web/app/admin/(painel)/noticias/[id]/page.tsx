@@ -87,6 +87,29 @@ export default async function PaginaEditarNoticia({
           </label>
         </div>
 
+        <div className="pt-4 border-t border-slate-100">
+          <label className="block text-sm font-semibold text-slate-700 mb-1">Registrar nota de correção (Ouvidoria)</label>
+          <p className="text-xs text-slate-500 mb-2">
+            Preencha só se esta edição está corrigindo um erro apontado por um leitor. O texto aparece publicamente na
+            matéria, com a data de hoje. Deixe em branco se é só um ajuste comum, sem erro a corrigir.
+          </p>
+          <textarea
+            name="nova_correcao"
+            rows={2}
+            placeholder="Ex: Corrigimos o nome do bairro citado na matéria, que estava incorreto."
+            className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-esmeralda"
+          />
+          {noticia.correcoes?.length > 0 && (
+            <div className="mt-3 flex flex-col gap-1.5">
+              {noticia.correcoes.map((c, i) => (
+                <p key={i} className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2.5 py-1.5">
+                  <span className="font-semibold">{new Date(c.data).toLocaleDateString("pt-BR")}:</span> {c.texto}
+                </p>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div className="pt-2 border-t border-slate-100 flex justify-end">
           <button type="submit" className="bg-navy text-white font-semibold text-sm px-5 py-2.5 rounded-md hover:bg-slate-800">
             Salvar alterações

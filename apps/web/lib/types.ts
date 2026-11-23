@@ -30,6 +30,11 @@ export interface InfograficoDados {
   fonteDados: string;
 }
 
+export interface CorrecaoNota {
+  data: string;
+  texto: string;
+}
+
 export interface Noticia {
   id: string;
   titulo: string;
@@ -42,6 +47,7 @@ export interface Noticia {
   imagem_credito: string | null;
   imagem_e_fallback: boolean;
   infografico: InfograficoDados | null;
+  correcoes: CorrecaoNota[];
   fonte_url_original: string;
   fonte_credito: string | null;
   origem_ia: OrigemIA;
