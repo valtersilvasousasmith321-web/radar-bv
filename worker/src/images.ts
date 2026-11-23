@@ -3,6 +3,7 @@ import { config } from "./config.js";
 import { supabase } from "./db.js";
 import { log } from "./logger.js";
 import { escolherMelhorImagem, validarImagemBancoProprio, sugerirPalavrasChaveAlternativas, type CandidatoImagem } from "./ai/editorImagens.js";
+import { perguntar, jaInformouHoje } from "./relatorios.js";
 import type { Editoria, ResultadoImagem } from "./types.js";
 
 /** Contexto estruturado da matéria, usado tanto pro casamento de tags quanto pro Verificador de Imagem (precisa de título/subtítulo legíveis, não um blob achatado). */
@@ -333,6 +334,21 @@ export async function obterImagemParaMateria(
     palavraChave,
     editoria,
   });
+
+  // Central de Transparência (item 22): isso é justamente o tipo de decisão
+  // que vale a pena o Editor de Imagens levar pro Valter — "estou usando a
+  // foto genérica com frequência nesse assunto, quer que eu reforce o banco
+  // próprio aqui?" — em vez de só sumir num log técnico. Um aviso por
+  // editoria por dia é suficiente pra mostrar o padrão sem virar spam.
+  const marcador = `fallback-generico-${editoria}-${new Date().toISOString().slice(0, 10)}`;
+  if (!(await jaInformouHoje("Editor de Imagens", marcador))) {
+    await perguntar(
+      "Editor de Imagens",
+      `Não encontrei nenhuma foto compatível pra uma matéria de "${editoria}" (nem no banco próprio, nem nos bancos livres, nem com buscas alternativas) — publiquei com a imagem institucional genérica. Se isso estiver acontecendo direto nesse assunto, vale a pena eu priorizar fotos reais de Boa Vista/Roraima pra essa categoria no banco próprio.`,
+      { editoria, palavraChave, marcador }
+    );
+  }
+
   return buscarImagemFallback(editoria);
 }
 

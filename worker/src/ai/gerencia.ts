@@ -1,6 +1,7 @@
 import { supabase } from "../db.js";
 import { log } from "../logger.js";
 import { statusProvedores } from "./quotaTracker.js";
+import { perguntar, informar, jaInformouHoje } from "../relatorios.js";
 
 /**
  * Gerência/RH geral (item 12 do plano) — "supervisiona o desempenho de
@@ -50,6 +51,24 @@ export async function supervisionarEquipe(): Promise<void> {
         provedoresSemFolego: indisponiveis.map((p) => ({ provedor: p.provedor, voltaEmSegundos: p.voltaEmSegundos })),
       },
     );
+
+    // Central de Transparência (item 22): o apagão total já é avisado em
+    // tempo real pelo quotaTracker — isto aqui é complementar, porque cobre
+    // falha sistêmica mesmo quando NENHUM provedor está formalmente
+    // marcado "sem fôlego" (ex.: erro de formato/conteúdo recorrente, não
+    // cota). Dedup por hora pra não repetir a cada checagem enquanto durar.
+    const marcadorHora = `falha-sistemica-${new Date().toISOString().slice(0, 13)}`;
+    if (!(await jaInformouHoje("RH/Supervisão da Equipe de IA", marcadorHora))) {
+      await perguntar(
+        "RH/Supervisão da Equipe de IA",
+        `A equipe de IA não conseguiu redigir ${totalFalhas} matéria(s) na última hora. ${
+          indisponiveis.length > 0
+            ? `Provedor(es) sem fôlego agora: ${indisponiveis.map((p) => p.provedor).join(", ")}.`
+            : "Nenhum provedor está marcado como sem cota — pode ser outro tipo de falha (conteúdo da fonte, formato de resposta)."
+        } Vale a pena eu dar uma olhada com mais calma se isso continuar.`,
+        { totalFalhasUltimaHora: totalFalhas, provedoresSemFolego: indisponiveis, marcador: marcadorHora }
+      );
+    }
     return;
   }
 
@@ -61,5 +80,14 @@ export async function supervisionarEquipe(): Promise<void> {
     await log("info", "gerencia", "Provedor(es) de IA com cooldown escalado (provável cota diária esgotada)", {
       provedores: comCooldownLongo.map((p) => ({ provedor: p.provedor, voltaEmSegundos: p.voltaEmSegundos })),
     });
+
+    const marcadorDia = `cooldown-longo-${new Date().toISOString().slice(0, 10)}`;
+    if (!(await jaInformouHoje("RH/Supervisão da Equipe de IA", marcadorDia))) {
+      await informar(
+        "RH/Supervisão da Equipe de IA",
+        `${comCooldownLongo.map((p) => p.provedor).join(", ")} ${comCooldownLongo.length === 1 ? "está" : "estão"} com cota provavelmente esgotada por hoje (cooldown longo) — o resto da bancada está cobrindo sem problema.`,
+        { provedores: comCooldownLongo, marcador: marcadorDia }
+      );
+    }
   }
 }

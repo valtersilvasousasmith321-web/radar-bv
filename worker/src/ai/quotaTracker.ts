@@ -1,4 +1,5 @@
 import { log } from "../logger.js";
+import { perguntar, jaInformouHoje } from "../relatorios.js";
 
 /**
  * Memória de curto prazo de quais provedores de IA estão "sem fôlego" agora
@@ -93,6 +94,33 @@ export async function marcarIndisponivel(
       escalonado: falhouDeNovoRapido,
     });
   }
+
+  await avisarSeApagaoTotal();
+}
+
+/** Provedores de nuvem que, juntos, cobrem toda a bancada paga — Ollama (local) fica de fora porque não tem cota pra esgotar. */
+const PROVEDORES_CLOUD: Provedor[] = ["gemini", "claude", "groq", "openrouter"];
+
+/**
+ * Central de Transparência (item 22): o cenário que realmente merece uma
+ * pergunta pro Valter não é "um provedor ficou sem fôlego" (isso é rotina,
+ * o fallback em cascata já resolve sozinho) — é todos os provedores de
+ * nuvem pagos ficarem indisponíveis AO MESMO TEMPO, porque aí o Radar BV
+ * para de produzir matéria nova até algum voltar. Um aviso por dia é
+ * suficiente pra não repetir a cada item descartado enquanto durar o apagão.
+ */
+async function avisarSeApagaoTotal(): Promise<void> {
+  const todosIndisponiveis = PROVEDORES_CLOUD.every((p) => !estaDisponivel(p));
+  if (!todosIndisponiveis) return;
+
+  const marcador = `apagao-total-${new Date().toISOString().slice(0, 10)}`;
+  if (await jaInformouHoje("Supervisor de Provedores de IA", marcador)) return;
+
+  await perguntar(
+    "Supervisor de Provedores de IA",
+    "Todos os provedores de IA de nuvem (Gemini, Claude, Groq e OpenRouter) estão sem fôlego ao mesmo tempo agora — o Radar BV vai parar de produzir matéria nova até algum deles voltar. Isso é um bom sinal de que vale a pena criar as contas do Mistral e da Cohere que a gente tinha planejado, pra ampliar a bancada e isso não se repetir.",
+    { provedores: PROVEDORES_CLOUD, marcador }
+  );
 }
 
 /** Pra exibir no painel do administrador (item 22 do plano) — nunca pro público. */

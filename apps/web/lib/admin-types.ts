@@ -108,3 +108,24 @@ export interface Reclamacao {
   criado_em: string;
   respondido_em: string | null;
 }
+
+export type TipoRelatorioRedacao = "informe" | "pergunta";
+export type StatusRelatorioRedacao = "novo" | "lido" | "respondido";
+
+/**
+ * Relato de uma área da redação de IA pro Valter, em linguagem simples
+ * (item 22 — Painel do Administrador / Central de Transparência). Quando
+ * `tipo` é "pergunta", a área está pedindo opinião/decisão dele, que
+ * responde direto aqui — sem abrir SQL.
+ */
+export interface RelatorioRedacao {
+  id: string;
+  papel: string;
+  tipo: TipoRelatorioRedacao;
+  mensagem: string;
+  detalhes: Record<string, unknown> | null;
+  status: StatusRelatorioRedacao;
+  resposta_admin: string | null;
+  criado_em: string;
+  respondido_em: string | null;
+}

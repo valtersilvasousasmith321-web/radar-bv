@@ -1,5 +1,6 @@
 import { supabase } from "../db.js";
 import { log } from "../logger.js";
+import { informar, jaInformouHoje } from "../relatorios.js";
 
 /**
  * Analista de Desempenho/Estratégia (item 15 do plano) — "acompanha
@@ -37,6 +38,10 @@ export async function gerarRelatorioDesempenho(): Promise<void> {
 
   if (!noticias || noticias.length === 0) {
     await log("info", "analista", "Relatório semanal de desempenho: nenhuma notícia publicada nos últimos 7 dias");
+    await informar(
+      "Analista de Desempenho",
+      "Nenhuma matéria foi publicada nos últimos 7 dias — não dá pra calcular o relatório semanal de desempenho ainda."
+    );
     return;
   }
 
@@ -84,4 +89,27 @@ export async function gerarRelatorioDesempenho(): Promise<void> {
     editoriaComDesempenhoMaisFraco: piorEditoria?.editoria ?? null,
     banners: resumoBanners,
   });
+
+  // Central de Transparência (item 22): a mesma apuração acima, mas em
+  // português corrido pro Valter ler direto no painel — sem precisar
+  // decifrar o JSON técnico do log.
+  const marcador = `semanal-${new Date().toISOString().slice(0, 10)}`;
+  if (!(await jaInformouHoje("Analista de Desempenho", marcador))) {
+    const partes = [`Na última semana saíram ${noticias.length} matéria(s).`];
+    if (melhorEditoria && piorEditoria) {
+      partes.push(
+        `A editoria que mais rendeu foi "${melhorEditoria.editoria}" (média de ${melhorEditoria.mediaPorNoticia} visualizações por matéria), e a mais fraca foi "${piorEditoria.editoria}" (média de ${piorEditoria.mediaPorNoticia}).`
+      );
+    }
+    if (resumoBanners && resumoBanners.impressoes > 0) {
+      partes.push(`Os banners tiveram ${resumoBanners.ctrPercentual}% de taxa de clique (${resumoBanners.cliques} de ${resumoBanners.impressoes} impressões).`);
+    }
+    await informar("Analista de Desempenho", partes.join(" "), {
+      periodoDias: 7,
+      totalNoticiasPublicadas: noticias.length,
+      editoriaComMelhorDesempenho: melhorEditoria?.editoria ?? null,
+      editoriaComDesempenhoMaisFraco: piorEditoria?.editoria ?? null,
+      marcador,
+    });
+  }
 }

@@ -65,6 +65,15 @@ do $$ begin
   create type status_reclamacao as enum ('pendente', 'respondida', 'arquivada');
 exception when duplicate_object then null; end $$;
 
+do $$ begin
+  -- Painel do Administrador / Central de Transparência (item 22 do plano).
+  create type tipo_relatorio_redacao as enum ('informe', 'pergunta');
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create type status_relatorio_redacao as enum ('novo', 'lido', 'respondido');
+exception when duplicate_object then null; end $$;
+
 -- ----------------------------------------------------------------------------
 -- fontes_monitoradas: de onde o coletor busca notícias + Trava de Silêncio
 -- ----------------------------------------------------------------------------
@@ -327,6 +336,30 @@ create table if not exists reclamacoes_ouvidoria (
 create index if not exists idx_reclamacoes_status on reclamacoes_ouvidoria (status);
 create index if not exists idx_reclamacoes_criado_em on reclamacoes_ouvidoria (criado_em desc);
 
+-- ----------------------------------------------------------------------------
+-- relatorios_redacao: Painel do Administrador / Central de Transparência
+-- (item 22) — evolução da Mesa de Redação IA. Cada área da redação de IA
+-- (Editor-chefe, Editor de Imagens, Supervisor de Provedores de IA etc.)
+-- registra um relato em linguagem simples do que fez e como está indo, e
+-- pode marcar como 'pergunta' quando precisa de opinião/decisão do Valter,
+-- que responde direto aqui, sem abrir SQL.
+-- ----------------------------------------------------------------------------
+create table if not exists relatorios_redacao (
+  id             uuid primary key default gen_random_uuid(),
+  papel          text not null,
+  tipo           tipo_relatorio_redacao not null default 'informe',
+  mensagem       text not null,
+  detalhes       jsonb,
+  status         status_relatorio_redacao not null default 'novo',
+  resposta_admin text,
+  criado_em      timestamptz not null default now(),
+  respondido_em  timestamptz
+);
+
+create index if not exists idx_relatorios_status on relatorios_redacao (status);
+create index if not exists idx_relatorios_tipo on relatorios_redacao (tipo);
+create index if not exists idx_relatorios_criado_em on relatorios_redacao (criado_em desc);
+
 -- Dedup do resumo diário — garante 1 envio por destino por dia mesmo se o
 -- worker reiniciar ou o cron disparar 2x por engano.
 create table if not exists resumos_diarios_enviados (
@@ -510,6 +543,7 @@ alter table resumos_diarios_enviados enable row level security;
 alter table dicas_bairro enable row level security;
 alter table push_subscriptions enable row level security;
 alter table reclamacoes_ouvidoria enable row level security;
+alter table relatorios_redacao enable row level security;
 
 drop policy if exists "noticias_leitura_publica" on noticias;
 create policy "noticias_leitura_publica" on noticias

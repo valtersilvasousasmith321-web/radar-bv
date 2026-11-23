@@ -1,6 +1,17 @@
 import "server-only";
 import { supabaseAdmin } from "./supabase-admin";
-import type { Banner, Dica, DestinoWhatsApp, FonteMonitorada, Noticia, Reclamacao, StatusNoticia, StatusReclamacao } from "./admin-types";
+import type {
+  Banner,
+  Dica,
+  DestinoWhatsApp,
+  FonteMonitorada,
+  Noticia,
+  Reclamacao,
+  RelatorioRedacao,
+  StatusNoticia,
+  StatusReclamacao,
+  TipoRelatorioRedacao,
+} from "./admin-types";
 
 export async function obterResumoDashboard() {
   const db = supabaseAdmin();
@@ -10,6 +21,7 @@ export async function obterResumoDashboard() {
     { count: agendadas },
     { count: rascunhos },
     { count: reclamacoesPendentes },
+    { count: perguntasPendentes },
     { data: fontesComErro },
     { data: logsRecentes },
   ] = await Promise.all([
@@ -17,6 +29,7 @@ export async function obterResumoDashboard() {
     db.from("noticias").select("id", { count: "exact", head: true }).eq("status", "agendado"),
     db.from("noticias").select("id", { count: "exact", head: true }).eq("status", "rascunho"),
     db.from("reclamacoes_ouvidoria").select("id", { count: "exact", head: true }).eq("status", "pendente"),
+    db.from("relatorios_redacao").select("id", { count: "exact", head: true }).eq("tipo", "pergunta").neq("status", "respondido"),
     db.from("fontes_monitoradas").select("id, nome, erros_consecutivos, ultimo_erro").gt("erros_consecutivos", 0).order("erros_consecutivos", { ascending: false }),
     db.from("logs_sistema").select("id, nivel, origem, mensagem, criado_em").order("criado_em", { ascending: false }).limit(15),
   ]);
@@ -26,6 +39,7 @@ export async function obterResumoDashboard() {
     agendadas: agendadas ?? 0,
     rascunhos: rascunhos ?? 0,
     reclamacoesPendentes: reclamacoesPendentes ?? 0,
+    perguntasPendentes: perguntasPendentes ?? 0,
     fontesComErro: fontesComErro ?? [],
     logsRecentes: logsRecentes ?? [],
   };
@@ -82,4 +96,19 @@ export async function listarReclamacoes(filtroStatus?: StatusReclamacao): Promis
   const { data, error } = await query;
   if (error) throw new Error(`Falha ao listar reclamações da ouvidoria: ${error.message}`);
   return (data ?? []) as Reclamacao[];
+}
+
+/**
+ * Painel do Administrador / Central de Transparência (item 22). `filtroTipo`
+ * deixa a aba "Perguntas" mostrar só o que precisa de decisão do Valter; sem
+ * filtro, mostra tudo (informes + perguntas) em ordem cronológica reversa —
+ * igual uma caixa de entrada.
+ */
+export async function listarRelatorios(filtroTipo?: TipoRelatorioRedacao): Promise<RelatorioRedacao[]> {
+  const db = supabaseAdmin();
+  let query = db.from("relatorios_redacao").select("*").order("criado_em", { ascending: false }).limit(150);
+  if (filtroTipo) query = query.eq("tipo", filtroTipo);
+  const { data, error } = await query;
+  if (error) throw new Error(`Falha ao listar relatórios da redação de IA: ${error.message}`);
+  return (data ?? []) as RelatorioRedacao[];
 }
