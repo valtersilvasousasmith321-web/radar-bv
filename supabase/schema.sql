@@ -474,6 +474,7 @@ alter table destinos_whatsapp enable row level security;
 alter table resumos_diarios_enviados enable row level security;
 alter table dicas_bairro enable row level security;
 alter table push_subscriptions enable row level security;
+alter table reclamacoes_ouvidoria enable row level security;
 
 drop policy if exists "noticias_leitura_publica" on noticias;
 create policy "noticias_leitura_publica" on noticias

@@ -27,3 +27,8 @@ create table if not exists reclamacoes_ouvidoria (
 
 create index if not exists idx_reclamacoes_status on reclamacoes_ouvidoria (status);
 create index if not exists idx_reclamacoes_criado_em on reclamacoes_ouvidoria (criado_em desc);
+
+-- Mesmo padrão de segurança de todas as outras tabelas do projeto: RLS
+-- ligado, sem política pública — só o service_role (usado pelo painel admin
+-- e pela API /api/ouvidoria/reclamar) consegue ler/escrever.
+alter table reclamacoes_ouvidoria enable row level security;
