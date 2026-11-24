@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { config } from "../config.js";
 import { log } from "../logger.js";
+import { estaDisponivel, pareceErroDeCota, marcarIndisponivel } from "./quotaTracker.js";
 
 const anthropic = new Anthropic({ apiKey: config.ia.anthropicApiKey });
 const genAI = new GoogleGenerativeAI(config.ia.geminiApiKey);
@@ -71,6 +72,7 @@ async function pesquisarComClaude(tema: string, maxResultados: number): Promise<
 
     return noticias;
   } catch (err: any) {
+    if (pareceErroDeCota(err)) await marcarIndisponivel("claude", String(err?.message ?? err));
     await log("error", "pesquisador", "Falha na busca via Claude (web_search)", { tema, erro: String(err?.message ?? err) });
     return null;
   }
@@ -100,6 +102,7 @@ async function pesquisarComGemini(tema: string, maxResultados: number): Promise<
 
     return noticias;
   } catch (err: any) {
+    if (pareceErroDeCota(err)) await marcarIndisponivel("gemini", String(err?.message ?? err));
     await log("warning", "pesquisador", "Busca via Gemini (grounding) indisponível ou falhou", {
       tema,
       erro: String(err?.message ?? err),
@@ -150,6 +153,8 @@ Se não achar nada de verdade, concreto e atual sobre esse tema (nem no portal o
  * citar a página de listagem como fonte.
  */
 export async function pesquisarResumoServico(tema: string): Promise<ResumoServico | null> {
+  if (!estaDisponivel("claude")) return null;
+
   const prompt = montarPromptResumoServico(tema);
 
   try {
@@ -186,6 +191,7 @@ export async function pesquisarResumoServico(tema: string): Promise<ResumoServic
 
     return { texto: resumoTexto, urlFonte, semNovidade: false };
   } catch (err: any) {
+    if (pareceErroDeCota(err)) await marcarIndisponivel("claude", String(err?.message ?? err));
     await log("error", "pesquisador", "Falha no resumo de serviço via Claude (web_search)", { tema, erro: String(err?.message ?? err) });
     return null;
   }
@@ -200,15 +206,21 @@ export async function pesquisarResumoServico(tema: string): Promise<ResumoServic
  * (nenhum resultado nesse ciclo, sem travar as demais fontes).
  */
 export async function pesquisarNoticias(tema: string, maxResultados = 5): Promise<ResultadoBusca[]> {
-  let resultados = await pesquisarComClaude(tema, maxResultados);
+  let resultados: ResultadoBusca[] | null = null;
 
-  if (!resultados || resultados.length === 0) {
-    await log("warning", "pesquisador", "Claude sem resultados úteis — acionando Gemini (grounding) como fallback", { tema });
-    resultados = await pesquisarComGemini(tema, maxResultados);
+  if (estaDisponivel("claude")) {
+    resultados = await pesquisarComClaude(tema, maxResultados);
   }
 
   if (!resultados || resultados.length === 0) {
-    await log("warning", "pesquisador", "Nenhum resultado de busca encontrado nos dois provedores neste ciclo", { tema });
+    if (estaDisponivel("gemini")) {
+      await log("warning", "pesquisador", "Claude sem resultados úteis — acionando Gemini (grounding) como fallback", { tema });
+      resultados = await pesquisarComGemini(tema, maxResultados);
+    }
+  }
+
+  if (!resultados || resultados.length === 0) {
+    await log("warning", "pesquisador", "Nenhum resultado de busca encontrado nos dois provedores neste ciclo (ou ambos sem fôlego)", { tema });
     return [];
   }
 

@@ -50,6 +50,16 @@ const PADROES_ERRO_DE_COTA = [
   /too many requests/i,
   /overloaded/i,
   /\b429\b/,
+  // Caso real (24/11/2026): a Anthropic recusa a chamada com HTTP 400
+  // "invalid_request_error" quando o saldo de crédito da conta acaba — não
+  // é um 429 nem usa a palavra "quota", então passava batido por essa lista
+  // e o Claude nunca era marcado como indisponível, mesmo ficando fora do
+  // ar por 14 dias seguidos. Funcionalmente é o mesmo problema (provedor
+  // inacessível até alguém agir do lado de fora do código), por isso entra
+  // aqui também.
+  /credit balance is too low/i,
+  /insufficient.{0,20}credit/i,
+  /purchase credits/i,
 ];
 
 /** Reconhece, pelo texto/status do erro, se foi cota/limite — e não outro tipo de falha (ex.: JSON inválido). */
