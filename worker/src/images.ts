@@ -171,17 +171,39 @@ async function buscarCandidatosOpenverse(palavraChave: string): Promise<Candidat
   }
 }
 
+/**
+ * Rodízio do Banco de Fotos Próprias (flagrado por Valter em 23/11/2026:
+ * "nossas fotos continuam a ser repetidas") — grava quando cada foto foi
+ * usada por último, pra próxima escolha sempre priorizar a MENOS usada
+ * recentemente em vez de sortear sem memória nenhuma. Nunca bloqueia nem
+ * derruba o pipeline se a gravação falhar (mesma regra fail-open de sempre
+ * — uma foto repetida é bem menos grave que uma notícia que não sai).
+ */
+async function marcarImagemComoUsada(id: string): Promise<void> {
+  try {
+    const { error } = await supabase.from("imagens_fallback").update({ ultima_vez_usada: new Date().toISOString() }).eq("id", id);
+    if (error) throw error;
+  } catch (err) {
+    console.error("[images] falha ao gravar rodízio de uso da foto (não afeta a publicação):", err);
+  }
+}
+
 /** Busca a imagem padrão pré-cadastrada para a editoria (Banco de Imagens de Segurança) */
 async function buscarImagemFallback(editoria: Editoria): Promise<ResultadoImagem> {
+  // Ordenado por rodízio: se um dia existir mais de 1 foto institucional
+  // marcada "padrao" pra mesma editoria, elas se revezam em vez de a
+  // primeira cadastrada sair sempre na frente.
   const { data } = await supabase
     .from("imagens_fallback")
-    .select("url")
+    .select("id, url")
     .eq("editoria", editoria)
     .eq("padrao", true)
+    .order("ultima_vez_usada", { ascending: true, nullsFirst: true })
     .limit(1)
     .maybeSingle();
 
   if (data?.url) {
+    await marcarImagemComoUsada(data.id);
     return { url: data.url, credito: "Imagem institucional Radar BV", eFallback: true };
   }
 
@@ -222,7 +244,10 @@ async function buscarImagemBancoProprio(
   // viatura (cadastrada na categoria "policia") tem que valer pra ela
   // também. O que decide se a foto serve é o tema de verdade (tag batendo
   // no título/subtítulo/tags da matéria), não o rótulo de editoria.
-  const { data, error } = await supabase.from("imagens_fallback").select("url, descricao, tags, editoria").eq("padrao", false);
+  const { data, error } = await supabase
+    .from("imagens_fallback")
+    .select("id, url, descricao, tags, editoria, ultima_vez_usada")
+    .eq("padrao", false);
 
   if (error || !data || data.length === 0) return null;
 
@@ -251,15 +276,29 @@ async function buscarImagemBancoProprio(
   // é real e reconhecível (prédio, viatura, hospital com nome) — usar a
   // errada não é "imagem meia-boca", é afirmar visualmente que o fato
   // aconteceu ali. Por isso, antes de aceitar a escolha, testa cada
-  // candidata do pool (em ordem aleatória, até achar uma aprovada ou
-  // esgotar o pool) contra o conteúdo real da matéria — só então vale;
-  // se NENHUMA passar, volta null e o fluxo normal cai pro banco de
-  // imagens livres (Unsplash/Pixabay/Pexels), que é sempre mais seguro
-  // que forçar uma foto real que não combina de verdade.
-  const embaralhado = [...pool].sort(() => Math.random() - 0.5);
-  for (const candidata of embaralhado) {
+  // candidata do pool (até achar uma aprovada ou esgotar o pool) contra o
+  // conteúdo real da matéria — só então vale; se NENHUMA passar, volta null
+  // e o fluxo normal cai pro banco de imagens livres (Unsplash/Pixabay/
+  // Pexels), que é sempre mais seguro que forçar uma foto real que não
+  // combina de verdade.
+  //
+  // Rodízio (23/11/2026, flagrado por Valter: "nossas fotos continuam a ser
+  // repetidas"): com poucas fotos cadastradas por tema, sortear sem memória
+  // faz a mesma foto voltar cedo demais — por isso a ordem de tentativa
+  // prioriza sempre a foto NÃO usada recentemente, em vez de aleatória pura
+  // (só embaralha entre as que nunca foram usadas ainda, ou entre empates).
+  const ordenadoPorRodizio = [...pool].sort((a, b) => {
+    const aNuncaUsada = !a.ultima_vez_usada;
+    const bNuncaUsada = !b.ultima_vez_usada;
+    if (aNuncaUsada && bNuncaUsada) return Math.random() - 0.5;
+    if (aNuncaUsada) return -1;
+    if (bNuncaUsada) return 1;
+    return new Date(a.ultima_vez_usada).getTime() - new Date(b.ultima_vez_usada).getTime();
+  });
+  for (const candidata of ordenadoPorRodizio) {
     const verificacao = await validarImagemBancoProprio(candidata.descricao ?? "", { ...materia, editoria });
     if (verificacao.aprovado) {
+      await marcarImagemComoUsada(candidata.id);
       return { url: candidata.url, credito: "Foto: Radar BV", eFallback: false };
     }
   }
