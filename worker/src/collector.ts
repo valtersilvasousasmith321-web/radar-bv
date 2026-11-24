@@ -4,7 +4,7 @@ import Parser from "rss-parser";
 import fetch from "node-fetch";
 import { supabase } from "./db.js";
 import { log } from "./logger.js";
-import { pesquisarNoticias } from "./ai/pesquisador.js";
+import { pesquisarNoticias, pesquisarResumoServico } from "./ai/pesquisador.js";
 import { extrairTextoPrincipal } from "./extrairTexto.js";
 import type { FonteMonitorada, ItemBruto } from "./types.js";
 
@@ -447,7 +447,55 @@ async function buscarConteudoDeUrl(url: string): Promise<string | null> {
  * lógica de busca que a IA usa quando alguém pede uma notícia no chat — e
  * busca o conteúdo completo de cada artigo individual encontrado.
  */
+/**
+ * Serviço ao Cidadão (vagas, editais, matrícula) nunca é "matéria com URL
+ * própria" — é listagem de portal que muda de dia a dia. Flagrado pelo
+ * Valter em 24/11/2026: a editoria vivia vazia porque coletarBusca normal
+ * exige achar uma notícia com URL individual (ver pesquisarNoticias), e
+ * esse tipo de conteúdo nunca tem isso, por natureza — então a busca
+ * sempre voltava vazia, sem nunca dar erro (por isso a fonte parecia
+ * "saudável" mesmo nunca produzindo nada).
+ *
+ * Em vez disso, gera UM item sintético por dia por fonte, com um resumo
+ * do que está em aberto AGORA (pesquisarResumoServico) — a URL é
+ * fabricada com a data de hoje embutida, só pra servir de identificador
+ * único (fecha a Trava de Silêncio normalmente, pra não reprocessar o
+ * mesmo dia 2x, e abre de novo sozinha no dia seguinte).
+ */
+async function coletarResumoServico(fonte: FonteMonitorada): Promise<ItemBruto[]> {
+  const resumo = await pesquisarResumoServico(fonte.url_base);
+  if (!resumo || resumo.semNovidade || !resumo.texto.trim()) return [];
+
+  // A URL exibida publicamente como "ver fonte" tem que ser real e
+  // clicável (resumo.urlFonte) — mas se ela for sempre a mesma página fixa
+  // (ex: "sine.rr.gov.br/vagas" todo santo dia), a Trava de Silêncio (que
+  // nunca reprocessa a mesma URL duas vezes, pra sempre) travaria a
+  // atualização diária depois da primeira vez. Por isso soma um parâmetro
+  // com a data de hoje à URL real: continua abrindo a página verdadeira
+  // pro leitor (sites ignoram parâmetro desconhecido), mas vira um
+  // identificador novo a cada dia pra Trava de Silêncio.
+  const hoje = new Date().toISOString().slice(0, 10);
+  const separador = resumo.urlFonte.includes("?") ? "&" : "?";
+  const urlComData = `${resumo.urlFonte}${separador}radarbv_d=${hoje}`;
+
+  return [
+    {
+      fonteId: fonte.id,
+      fonteNome: fonte.nome,
+      url: urlComData,
+      tituloOriginal: fonte.nome,
+      conteudoBruto: resumo.texto,
+      editoriaPadrao: fonte.editoria_padrao,
+      creditarPublicamente: fonte.creditar_publicamente,
+    },
+  ];
+}
+
 async function coletarBusca(fonte: FonteMonitorada): Promise<ItemBruto[]> {
+  if (fonte.editoria_padrao === "servico_cidadao") {
+    return coletarResumoServico(fonte);
+  }
+
   const encontrados = await pesquisarNoticias(fonte.url_base, 5);
   if (encontrados.length === 0) return [];
 
