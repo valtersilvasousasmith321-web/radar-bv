@@ -4,6 +4,9 @@ import Groq from "groq-sdk";
 import { config } from "../config.js";
 import { log } from "../logger.js";
 import { estaDisponivel, marcarIndisponivel, pareceErroDeCota } from "./quotaTracker.js";
+import { perguntarOpenRouter } from "./openrouter.js";
+import { perguntarMistral } from "./mistral.js";
+import { perguntarCohere } from "./cohere.js";
 import type { MateriaRedigida } from "../types.js";
 
 /**
@@ -112,12 +115,46 @@ async function perguntarClaude(prompt: string): Promise<ResultadoVerificacaoFato
   }
 }
 
+async function perguntarOpenRouterFatos(prompt: string): Promise<ResultadoVerificacaoFatos | null> {
+  const texto = await perguntarOpenRouter(prompt, "verificadorFatos");
+  if (!texto) return null;
+  try {
+    return extrairJson<ResultadoVerificacaoFatos>(texto);
+  } catch {
+    return null;
+  }
+}
+
+async function perguntarMistralFatos(prompt: string): Promise<ResultadoVerificacaoFatos | null> {
+  const texto = await perguntarMistral(prompt, "verificadorFatos");
+  if (!texto) return null;
+  try {
+    return extrairJson<ResultadoVerificacaoFatos>(texto);
+  } catch {
+    return null;
+  }
+}
+
+async function perguntarCohereFatos(prompt: string): Promise<ResultadoVerificacaoFatos | null> {
+  const texto = await perguntarCohere(prompt, "verificadorFatos");
+  if (!texto) return null;
+  try {
+    return extrairJson<ResultadoVerificacaoFatos>(texto);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Checa se a matéria redigida é fiel aos tópicos apurados. Se todas as IAs
  * falharem tecnicamente, aprova por padrão — este verificador é uma camada
  * extra de segurança, nunca pode travar a publicação sozinho por uma falha
  * de rede/cota. Se não houver tópicos apurados (ex: item sem apuração
  * estruturada), aprova direto sem gastar chamada de IA.
+ *
+ * Auditoria de 24/11/2026: cascata ampliada de 3 para os 7 provedores da
+ * bancada, pelo mesmo motivo do Revisor (Camada 2) — não dá pra "aprovar
+ * por padrão" sobrando 3 provedores sem tentar.
  */
 export async function verificarFatos(
   materia: MateriaRedigida,
@@ -133,10 +170,13 @@ export async function verificarFatos(
   let resultado: ResultadoVerificacaoFatos | null = null;
   if (estaDisponivel("groq")) resultado = await perguntarGroq(prompt);
   if (!resultado && estaDisponivel("gemini")) resultado = await perguntarGemini(prompt);
+  if (!resultado && estaDisponivel("openrouter")) resultado = await perguntarOpenRouterFatos(prompt);
+  if (!resultado && estaDisponivel("mistral")) resultado = await perguntarMistralFatos(prompt);
+  if (!resultado && estaDisponivel("cohere")) resultado = await perguntarCohereFatos(prompt);
   if (!resultado && estaDisponivel("claude")) resultado = await perguntarClaude(prompt);
 
   if (!resultado) {
-    await log("warning", "verificadorFatos", "Verificador indisponível em todos os provedores neste ciclo — aprovando por padrão", {
+    await log("warning", "verificadorFatos", "Verificador indisponível em todos os 7 provedores neste ciclo — aprovando por padrão", {
       titulo: materia.titulo,
     });
     return { aprovado: true, motivo: "Verificador de Fatos indisponível neste ciclo — aprovado por padrão" };

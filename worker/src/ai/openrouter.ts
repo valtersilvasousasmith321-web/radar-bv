@@ -138,3 +138,28 @@ export async function agruparComOpenRouterFallback(
     return null;
   }
 }
+
+/**
+ * Elo genérico (24/11/2026 — auditoria pedida pelo Valter): até aqui só
+ * triagem/redação/agrupamento tinham acesso aos 7 provedores da bancada.
+ * As camadas de segurança (Revisor Camada 2, Verificador de Fatos,
+ * Jurídico/Compliance, checagem de duplicação do Editor-chefe) só tentavam
+ * Groq -> Gemini -> Claude — se os 2 gratuitos mais usados caíssem junto
+ * (já aconteceu hoje com Claude+Gemini na busca), essas checagens caíam
+ * direto no "aprovado por padrão" sem nunca tentar OpenRouter/Mistral/
+ * Cohere, que ficavam disponíveis e nunca eram usados. Esta função deixa
+ * qualquer módulo de segurança acionar a OpenRouter com um prompt livre
+ * (sem exigir o formato de triagem/redação), do mesmo jeito que já faz a
+ * cascata principal.
+ */
+export async function perguntarOpenRouter(prompt: string, origemLog: string): Promise<string | null> {
+  if (!config.ia.openrouterApiKey) return null;
+  try {
+    const texto = await chamarOpenRouter(prompt);
+    return texto.trim() || null;
+  } catch (err: any) {
+    if (pareceErroDeCota(err)) await marcarIndisponivel("openrouter", String(err?.message ?? err));
+    await log("warning", origemLog, "Falha ao acionar OpenRouter", { erro: String(err?.message ?? err) });
+    return null;
+  }
+}

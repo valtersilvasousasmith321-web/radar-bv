@@ -4,6 +4,9 @@ import Groq from "groq-sdk";
 import { config } from "../config.js";
 import { log } from "../logger.js";
 import { estaDisponivel, marcarIndisponivel, pareceErroDeCota } from "./quotaTracker.js";
+import { perguntarOpenRouter } from "./openrouter.js";
+import { perguntarMistral } from "./mistral.js";
+import { perguntarCohere } from "./cohere.js";
 import type { MateriaRedigida } from "../types.js";
 
 /**
@@ -113,11 +116,46 @@ async function perguntarClaude(prompt: string): Promise<ResultadoJuridico | null
   }
 }
 
+async function perguntarOpenRouterJuridico(prompt: string): Promise<ResultadoJuridico | null> {
+  const texto = await perguntarOpenRouter(prompt, "juridico");
+  if (!texto) return null;
+  try {
+    return extrairJson<ResultadoJuridico>(texto);
+  } catch {
+    return null;
+  }
+}
+
+async function perguntarMistralJuridico(prompt: string): Promise<ResultadoJuridico | null> {
+  const texto = await perguntarMistral(prompt, "juridico");
+  if (!texto) return null;
+  try {
+    return extrairJson<ResultadoJuridico>(texto);
+  } catch {
+    return null;
+  }
+}
+
+async function perguntarCohereJuridico(prompt: string): Promise<ResultadoJuridico | null> {
+  const texto = await perguntarCohere(prompt, "juridico");
+  if (!texto) return null;
+  try {
+    return extrairJson<ResultadoJuridico>(texto);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Checa risco jurídico (exposição de menor, presunção de inocência,
  * difamação). Se todas as IAs falharem tecnicamente, aprova por padrão —
  * igual ao Revisor e ao Verificador de Fatos, é mais uma rede de segurança,
  * nunca pode travar a publicação sozinho por uma falha de rede/cota.
+ *
+ * Auditoria de 24/11/2026: cascata ampliada de 3 para os 7 provedores da
+ * bancada — este é justamente o módulo mais sensível (risco jurídico real),
+ * então é o que menos pode se dar ao luxo de "aprovar por padrão" tendo
+ * provedor disponível e não tentado.
  */
 export async function verificarCompliance(materia: MateriaRedigida): Promise<ResultadoJuridico> {
   const prompt = montarPrompt(materia);
@@ -125,10 +163,13 @@ export async function verificarCompliance(materia: MateriaRedigida): Promise<Res
   let resultado: ResultadoJuridico | null = null;
   if (estaDisponivel("groq")) resultado = await perguntarGroq(prompt);
   if (!resultado && estaDisponivel("gemini")) resultado = await perguntarGemini(prompt);
+  if (!resultado && estaDisponivel("openrouter")) resultado = await perguntarOpenRouterJuridico(prompt);
+  if (!resultado && estaDisponivel("mistral")) resultado = await perguntarMistralJuridico(prompt);
+  if (!resultado && estaDisponivel("cohere")) resultado = await perguntarCohereJuridico(prompt);
   if (!resultado && estaDisponivel("claude")) resultado = await perguntarClaude(prompt);
 
   if (!resultado) {
-    await log("warning", "juridico", "Checagem jurídica indisponível em todos os provedores neste ciclo — aprovando por padrão", {
+    await log("warning", "juridico", "Checagem jurídica indisponível em todos os 7 provedores neste ciclo — aprovando por padrão", {
       titulo: materia.titulo,
     });
     return { aprovado: true, motivo: "Checagem jurídica indisponível neste ciclo — aprovada por padrão" };

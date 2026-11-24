@@ -72,6 +72,42 @@ export async function supervisionarEquipe(): Promise<void> {
     return;
   }
 
+  // Auditoria de 24/11/2026 (achado #1): as 4 camadas de segurança
+  // (Revisor, Verificador de Fatos, Jurídico, Editor-chefe/duplicação,
+  // Editor de Imagens) são "fail-open" por design — se todos os provedores
+  // disponíveis falharem, cada uma aprova por padrão em vez de travar a
+  // publicação. Isso é correto caso a caso (nunca travar o jornal por uma
+  // falha técnica pontual), mas significava que, numa falha sistêmica mais
+  // ampla, essas camadas podiam ficar "aprovando tudo sem checar" durante
+  // horas sem NINGUÉM ser avisado — o apagão só virava alerta pro lado da
+  // redação (pesquisador/redator), nunca pro lado da segurança editorial.
+  // Agora conta quantas vezes essas camadas "aprovaram por padrão" na
+  // última hora e avisa se passar de um limite — mesmo que a bancada de IA
+  // como um todo pareça estar resolvendo itens normalmente.
+  const CAMADAS_SEGURANCA = ["revisor", "verificadorFatos", "juridico", "editorChefe", "editorImagens"];
+  const LIMITE_FAIL_OPEN = 5;
+
+  const { count: totalFailOpen, error: erroFailOpen } = await supabase
+    .from("logs_sistema")
+    .select("id", { count: "exact", head: true })
+    .eq("nivel", "warning")
+    .in("origem", CAMADAS_SEGURANCA)
+    .ilike("mensagem", "%por padrão%")
+    .gte("criado_em", desde);
+
+  if (erroFailOpen) {
+    await log("warning", "gerencia", "Falha ao consultar logs pra supervisão das camadas de segurança", { erro: erroFailOpen.message });
+  } else if ((totalFailOpen ?? 0) >= LIMITE_FAIL_OPEN) {
+    const marcadorHoraSeguranca = `fail-open-seguranca-${new Date().toISOString().slice(0, 13)}`;
+    if (!(await jaInformouHoje("RH/Supervisão da Equipe de IA", marcadorHoraSeguranca))) {
+      await perguntar(
+        "RH/Supervisão da Equipe de IA",
+        `As camadas de segurança editorial (Revisor, Verificador de Fatos, Jurídico, checagem de duplicação, Editor de Imagens) aprovaram matérias "por padrão" (sem checagem de IA de verdade, por falta de provedor disponível) ${totalFailOpen} vez(es) na última hora. Isso pode significar que notícias estão saindo sem a segunda camada de revisão. Vale a pena eu dar uma olhada.`,
+        { totalFailOpenUltimaHora: totalFailOpen, marcador: marcadorHoraSeguranca }
+      );
+    }
+  }
+
   // Mesmo sem falha sistêmica, avisa se algum provedor está escalado num
   // cooldown bem longo (sinal de que a cota diária dele provavelmente não
   // vai voltar tão cedo) — só informativo, pra aparecer no painel futuro.

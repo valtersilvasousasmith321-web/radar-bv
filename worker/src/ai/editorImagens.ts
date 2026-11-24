@@ -4,6 +4,9 @@ import Groq from "groq-sdk";
 import { config } from "../config.js";
 import { log } from "../logger.js";
 import { estaDisponivel, marcarIndisponivel, pareceErroDeCota } from "./quotaTracker.js";
+import { perguntarOpenRouter } from "./openrouter.js";
+import { perguntarMistral } from "./mistral.js";
+import { perguntarCohere } from "./cohere.js";
 
 /**
  * Editor de Imagens (item 8 do plano) — "lê e entende o resumo da matéria
@@ -134,15 +137,30 @@ async function perguntarClaude(prompt: string): Promise<number | null> {
  * verdade?" — só que com 1 opção em vez de N), então agora SEMPRE roda a IA,
  * não importa quantas candidatas vieram.
  */
+async function perguntarIndiceGenerico(prompt: string, provedor: "openrouter" | "mistral" | "cohere"): Promise<number | null> {
+  const fn = provedor === "openrouter" ? perguntarOpenRouter : provedor === "mistral" ? perguntarMistral : perguntarCohere;
+  const texto = await fn(prompt, "editorImagens");
+  if (!texto) return null;
+  try {
+    return extrairJson<{ indice: number }>(texto).indice;
+  } catch {
+    return null;
+  }
+}
+
 export async function escolherMelhorImagem(
   candidatos: CandidatoImagem[],
   contextoMateria: string,
 ): Promise<{ escolhida: CandidatoImagem; confiavel: boolean }> {
   let indice: number | null = null;
+  const prompt = montarPrompt(contextoMateria, candidatos);
 
-  if (estaDisponivel("groq")) indice = await perguntarGroq(montarPrompt(contextoMateria, candidatos));
-  if (indice === null && estaDisponivel("gemini")) indice = await perguntarGemini(montarPrompt(contextoMateria, candidatos));
-  if (indice === null && estaDisponivel("claude")) indice = await perguntarClaude(montarPrompt(contextoMateria, candidatos));
+  if (estaDisponivel("groq")) indice = await perguntarGroq(prompt);
+  if (indice === null && estaDisponivel("gemini")) indice = await perguntarGemini(prompt);
+  if (indice === null && estaDisponivel("openrouter")) indice = await perguntarIndiceGenerico(prompt, "openrouter");
+  if (indice === null && estaDisponivel("mistral")) indice = await perguntarIndiceGenerico(prompt, "mistral");
+  if (indice === null && estaDisponivel("cohere")) indice = await perguntarIndiceGenerico(prompt, "cohere");
+  if (indice === null && estaDisponivel("claude")) indice = await perguntarClaude(prompt);
 
   if (indice === null || indice < 0 || indice >= candidatos.length) {
     if (indice === -1) {
@@ -232,6 +250,18 @@ async function perguntarClaudeAlternativas(prompt: string): Promise<string[] | n
  * (ou três) chances de achar uma foto de banco livre que realmente combine,
  * antes de aceitar a imagem genérica como último recurso.
  */
+async function perguntarAlternativasGenerico(prompt: string, provedor: "openrouter" | "mistral" | "cohere"): Promise<string[] | null> {
+  const fn = provedor === "openrouter" ? perguntarOpenRouter : provedor === "mistral" ? perguntarMistral : perguntarCohere;
+  const texto = await fn(prompt, "editorImagens");
+  if (!texto) return null;
+  try {
+    const json = extrairJson<{ alternativas: string[] }>(texto);
+    return json.alternativas?.length ? json.alternativas : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function sugerirPalavrasChaveAlternativas(
   materia: { titulo: string; subtitulo: string; tags: string[] },
   palavraChaveOriginal: string,
@@ -241,6 +271,9 @@ export async function sugerirPalavrasChaveAlternativas(
   let alternativas: string[] | null = null;
   if (estaDisponivel("groq")) alternativas = await perguntarGroqAlternativas(prompt);
   if (!alternativas && estaDisponivel("gemini")) alternativas = await perguntarGeminiAlternativas(prompt);
+  if (!alternativas && estaDisponivel("openrouter")) alternativas = await perguntarAlternativasGenerico(prompt, "openrouter");
+  if (!alternativas && estaDisponivel("mistral")) alternativas = await perguntarAlternativasGenerico(prompt, "mistral");
+  if (!alternativas && estaDisponivel("cohere")) alternativas = await perguntarAlternativasGenerico(prompt, "cohere");
   if (!alternativas && estaDisponivel("claude")) alternativas = await perguntarClaudeAlternativas(prompt);
 
   if (!alternativas) {
@@ -351,6 +384,17 @@ async function perguntarClaudeVerificacao(prompt: string): Promise<{ aprovado: b
  * exclusão rígida de "brasil_mundo" em images.ts continua valendo sempre,
  * mesmo com o Verificador fora do ar.
  */
+async function perguntarVerificacaoGenerico(prompt: string, provedor: "openrouter" | "mistral" | "cohere"): Promise<{ aprovado: boolean; motivo?: string } | null> {
+  const fn = provedor === "openrouter" ? perguntarOpenRouter : provedor === "mistral" ? perguntarMistral : perguntarCohere;
+  const texto = await fn(prompt, "editorImagens");
+  if (!texto) return null;
+  try {
+    return extrairJson<{ aprovado: boolean; motivo?: string }>(texto);
+  } catch {
+    return null;
+  }
+}
+
 export async function validarImagemBancoProprio(
   descricaoFoto: string,
   materia: { titulo: string; subtitulo: string; editoria: string; tags: string[] }
@@ -361,6 +405,9 @@ export async function validarImagemBancoProprio(
 
   if (estaDisponivel("groq")) resultado = await perguntarGroqVerificacao(prompt);
   if (!resultado && estaDisponivel("gemini")) resultado = await perguntarGeminiVerificacao(prompt);
+  if (!resultado && estaDisponivel("openrouter")) resultado = await perguntarVerificacaoGenerico(prompt, "openrouter");
+  if (!resultado && estaDisponivel("mistral")) resultado = await perguntarVerificacaoGenerico(prompt, "mistral");
+  if (!resultado && estaDisponivel("cohere")) resultado = await perguntarVerificacaoGenerico(prompt, "cohere");
   if (!resultado && estaDisponivel("claude")) resultado = await perguntarClaudeVerificacao(prompt);
 
   if (!resultado) {

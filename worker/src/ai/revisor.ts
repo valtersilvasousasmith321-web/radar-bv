@@ -4,6 +4,9 @@ import Groq from "groq-sdk";
 import { config } from "../config.js";
 import { log } from "../logger.js";
 import { estaDisponivel, marcarIndisponivel, pareceErroDeCota } from "./quotaTracker.js";
+import { perguntarOpenRouter } from "./openrouter.js";
+import { perguntarMistral } from "./mistral.js";
+import { perguntarCohere } from "./cohere.js";
 import type { MateriaRedigida } from "../types.js";
 
 /**
@@ -183,12 +186,48 @@ async function perguntarClaude(prompt: string): Promise<ResultadoCamada2 | null>
   }
 }
 
+async function perguntarOpenRouterCamada2(prompt: string): Promise<ResultadoCamada2 | null> {
+  const texto = await perguntarOpenRouter(prompt, "revisor");
+  if (!texto) return null;
+  try {
+    return extrairJson<ResultadoCamada2>(texto);
+  } catch {
+    return null;
+  }
+}
+
+async function perguntarMistralCamada2(prompt: string): Promise<ResultadoCamada2 | null> {
+  const texto = await perguntarMistral(prompt, "revisor");
+  if (!texto) return null;
+  try {
+    return extrairJson<ResultadoCamada2>(texto);
+  } catch {
+    return null;
+  }
+}
+
+async function perguntarCohereCamada2(prompt: string): Promise<ResultadoCamada2 | null> {
+  const texto = await perguntarCohere(prompt, "revisor");
+  if (!texto) return null;
+  try {
+    return extrairJson<ResultadoCamada2>(texto);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Camada 2 — sempre roda, mesmo que a Camada 1 não tenha achado nada
  * (só IA pega erro de sentido/tom/foto incoerente). Se todas as IAs
  * falharem tecnicamente, aprova por padrão — o Revisor é uma rede de
  * segurança a mais, nunca pode travar a publicação sozinho por uma falha
  * de rede.
+ *
+ * Auditoria de 24/11/2026: a cascata só cobria 3 dos 7 provedores da
+ * bancada (groq → gemini → claude). Se os 3 falhassem/estivessem sem
+ * cota ao mesmo tempo (como já aconteceu), a Camada 2 "aprovava por
+ * padrão" mesmo tendo mais 3 provedores disponíveis e não usados.
+ * Agora usa a bancada inteira antes de desistir.
  */
 export async function revisarCamada2(
   materia: MateriaRedigida,
@@ -201,10 +240,13 @@ export async function revisarCamada2(
   let resultado: ResultadoCamada2 | null = null;
   if (estaDisponivel("groq")) resultado = await perguntarGroq(prompt);
   if (!resultado && estaDisponivel("gemini")) resultado = await perguntarGemini(prompt);
+  if (!resultado && estaDisponivel("openrouter")) resultado = await perguntarOpenRouterCamada2(prompt);
+  if (!resultado && estaDisponivel("mistral")) resultado = await perguntarMistralCamada2(prompt);
+  if (!resultado && estaDisponivel("cohere")) resultado = await perguntarCohereCamada2(prompt);
   if (!resultado && estaDisponivel("claude")) resultado = await perguntarClaude(prompt);
 
   if (!resultado) {
-    await log("warning", "revisor", "Camada 2 indisponível em todos os provedores neste ciclo — aprovando por padrão", {
+    await log("warning", "revisor", "Camada 2 indisponível em todos os 7 provedores neste ciclo — aprovando por padrão", {
       titulo: materia.titulo,
     });
     return { aprovado: true, motivo: "Revisor indisponível neste ciclo — aprovado por padrão" };

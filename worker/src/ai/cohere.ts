@@ -133,3 +133,20 @@ export async function agruparComCohereFallback(
     return null;
   }
 }
+
+/**
+ * Elo genérico (24/11/2026 — auditoria pedida pelo Valter), mesma lógica de
+ * perguntarOpenRouter() em openrouter.ts: dá às camadas de segurança acesso
+ * à Cohere com um prompt livre, não só triagem/redação/agrupamento.
+ */
+export async function perguntarCohere(prompt: string, origemLog: string): Promise<string | null> {
+  if (!config.ia.cohereApiKey) return null;
+  try {
+    const texto = await chamarCohere(prompt);
+    return texto.trim() || null;
+  } catch (err: any) {
+    if (pareceErroDeCota(err)) await marcarIndisponivel("cohere", String(err?.message ?? err));
+    await log("warning", origemLog, "Falha ao acionar Cohere", { erro: String(err?.message ?? err) });
+    return null;
+  }
+}

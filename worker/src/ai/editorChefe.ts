@@ -5,6 +5,9 @@ import { config } from "../config.js";
 import { supabase } from "../db.js";
 import { log } from "../logger.js";
 import { estaDisponivel, marcarIndisponivel, pareceErroDeCota } from "./quotaTracker.js";
+import { perguntarOpenRouter } from "./openrouter.js";
+import { perguntarMistral } from "./mistral.js";
+import { perguntarCohere } from "./cohere.js";
 import type { MateriaRedigida } from "../types.js";
 
 /**
@@ -42,18 +45,19 @@ function extrairJson<T>(texto: string): T {
   }
 }
 
-function montarPrompt(materia: MateriaRedigida, candidatas: { titulo: string; subtitulo: string }[]): string {
-  const lista = candidatas.map((c, i) => `${i + 1}. ${c.titulo} — ${c.subtitulo}`).join("\n");
+function montarPrompt(materia: MateriaRedigida, candidatas: { titulo: string; subtitulo: string; editoria: string }[]): string {
+  const lista = candidatas.map((c, i) => `${i + 1}. [${c.editoria}] ${c.titulo} — ${c.subtitulo}`).join("\n");
   return `Você é o Editor-chefe do Radar BV, portal de notícias de Boa Vista/Roraima. Sua função aqui é só uma: evitar publicar a MESMA notícia duas vezes quando ela vem de fontes diferentes (ex: duas fontes de RSS cobrindo o mesmo acidente, ou um pesquisador de bairro relatando algo que uma fonte oficial já publicou).
 
 NOTÍCIA NOVA, esperando pra ser publicada:
+Editoria: ${materia.editoria}
 Título: ${materia.titulo}
 Subtítulo: ${materia.subtitulo}
 
-NOTÍCIAS JÁ NA FILA/PUBLICADAS NAS ÚLTIMAS 24H (mesma editoria):
+NOTÍCIAS JÁ NA FILA/PUBLICADAS NAS ÚLTIMAS 24H (de todas as editorias — a editoria de cada uma está entre colchetes):
 ${lista}
 
-Pergunta: a notícia nova trata do MESMO evento/fato específico que alguma das notícias já na lista (não apenas o mesmo tema geral — tem que ser o mesmo acontecimento)? Duas matérias sobre o mesmo assunto genérico (ex: "trânsito em Boa Vista") mas eventos diferentes NÃO são duplicatas.
+Pergunta: a notícia nova trata do MESMO evento/fato específico que alguma das notícias já na lista (não apenas o mesmo tema geral — tem que ser o mesmo acontecimento)? Duas matérias sobre o mesmo assunto genérico (ex: "trânsito em Boa Vista") mas eventos diferentes NÃO são duplicatas. Importante: a duplicata pode estar classificada numa editoria diferente da nova notícia (ex: uma foi classificada errado como "Brasil & Mundo" quando na verdade é sobre Roraima) — julgue pelo evento/fato, não pela editoria.
 
 Responda SOMENTE com um JSON válido, sem comentários, sem markdown, no formato exato:
 {"duplicada": boolean, "motivo": "string curta explicando a decisão"}`;
@@ -114,23 +118,60 @@ async function perguntarClaude(prompt: string): Promise<ResultadoOrganizacao | n
   }
 }
 
+async function perguntarOpenRouterOrg(prompt: string): Promise<ResultadoOrganizacao | null> {
+  const texto = await perguntarOpenRouter(prompt, "editorChefe");
+  if (!texto) return null;
+  try {
+    return extrairJson<ResultadoOrganizacao>(texto);
+  } catch {
+    return null;
+  }
+}
+
+async function perguntarMistralOrg(prompt: string): Promise<ResultadoOrganizacao | null> {
+  const texto = await perguntarMistral(prompt, "editorChefe");
+  if (!texto) return null;
+  try {
+    return extrairJson<ResultadoOrganizacao>(texto);
+  } catch {
+    return null;
+  }
+}
+
+async function perguntarCohereOrg(prompt: string): Promise<ResultadoOrganizacao | null> {
+  const texto = await perguntarCohere(prompt, "editorChefe");
+  if (!texto) return null;
+  try {
+    return extrairJson<ResultadoOrganizacao>(texto);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Checa se a matéria é duplicata de algo real já na fila/publicado nas
- * últimas 24h, na mesma editoria. Busca as candidatas direto no banco
- * (nada de "achismo" da IA sem dado) e só gasta uma chamada de IA se
- * houver candidatas de verdade pra comparar. Nunca bloqueia a publicação
- * sozinho por falha técnica — aprova (não-duplicada) por padrão nesse caso.
+ * últimas 24h. Busca as candidatas direto no banco (nada de "achismo" da IA
+ * sem dado) e só gasta uma chamada de IA se houver candidatas de verdade
+ * pra comparar. Nunca bloqueia a publicação sozinho por falha técnica —
+ * aprova (não-duplicada) por padrão nesse caso.
+ *
+ * Auditoria de 24/11/2026 (achado #2, cross-editoria): antes a busca de
+ * candidatas filtrava por `.eq("editoria", materia.editoria)` — então se a
+ * mesma notícia chegasse por duas fontes e uma delas fosse classificada
+ * (erroneamente ou não) numa editoria diferente, a duplicata passava batido
+ * porque a candidata nem entrava na lista de comparação. Agora busca em
+ * todas as editorias das últimas 24h (limite maior pra compensar) e deixa a
+ * IA julgar pelo evento/fato, não pela editoria.
  */
 export async function verificarDuplicacaoReal(materia: MateriaRedigida): Promise<ResultadoOrganizacao> {
   const desde = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
   const { data: candidatas, error } = await supabase
     .from("noticias")
-    .select("titulo, subtitulo")
-    .eq("editoria", materia.editoria)
+    .select("titulo, subtitulo, editoria")
     .in("status", ["publicado", "agendado", "rascunho"])
     .gte("criado_em", desde)
-    .limit(15);
+    .limit(40);
 
   if (error) {
     await log("warning", "editorChefe", "Falha ao buscar candidatas pra checagem de duplicação — aprovando por padrão", {
@@ -140,7 +181,7 @@ export async function verificarDuplicacaoReal(materia: MateriaRedigida): Promise
   }
 
   if (!candidatas || candidatas.length === 0) {
-    return { duplicada: false, motivo: "Nenhuma notícia recente na mesma editoria pra comparar" };
+    return { duplicada: false, motivo: "Nenhuma notícia recente pra comparar" };
   }
 
   const prompt = montarPrompt(materia, candidatas);
@@ -148,10 +189,13 @@ export async function verificarDuplicacaoReal(materia: MateriaRedigida): Promise
   let resultado: ResultadoOrganizacao | null = null;
   if (estaDisponivel("groq")) resultado = await perguntarGroq(prompt);
   if (!resultado && estaDisponivel("gemini")) resultado = await perguntarGemini(prompt);
+  if (!resultado && estaDisponivel("openrouter")) resultado = await perguntarOpenRouterOrg(prompt);
+  if (!resultado && estaDisponivel("mistral")) resultado = await perguntarMistralOrg(prompt);
+  if (!resultado && estaDisponivel("cohere")) resultado = await perguntarCohereOrg(prompt);
   if (!resultado && estaDisponivel("claude")) resultado = await perguntarClaude(prompt);
 
   if (!resultado) {
-    await log("warning", "editorChefe", "Checagem de duplicação indisponível em todos os provedores — aprovando por padrão", {
+    await log("warning", "editorChefe", "Checagem de duplicação indisponível em todos os 7 provedores — aprovando por padrão", {
       titulo: materia.titulo,
     });
     return { duplicada: false, motivo: "Editor-chefe indisponível neste ciclo — aprovado por padrão" };

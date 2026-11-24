@@ -130,3 +130,20 @@ export async function agruparComMistralFallback(
     return null;
   }
 }
+
+/**
+ * Elo genérico (24/11/2026 — auditoria pedida pelo Valter), mesma lógica de
+ * perguntarOpenRouter() em openrouter.ts: dá às camadas de segurança acesso
+ * à Mistral com um prompt livre, não só triagem/redação/agrupamento.
+ */
+export async function perguntarMistral(prompt: string, origemLog: string): Promise<string | null> {
+  if (!config.ia.mistralApiKey) return null;
+  try {
+    const texto = await chamarMistral(prompt);
+    return texto.trim() || null;
+  } catch (err: any) {
+    if (pareceErroDeCota(err)) await marcarIndisponivel("mistral", String(err?.message ?? err));
+    await log("warning", origemLog, "Falha ao acionar Mistral", { erro: String(err?.message ?? err) });
+    return null;
+  }
+}
