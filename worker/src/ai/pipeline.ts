@@ -95,14 +95,36 @@ const VEICULOS_IMPRENSA_BLOQUEADOS = [
   "ig",
 ];
 
+/**
+ * Flagrado por Valter de novo em 23/11/2026, horas depois da "correção"
+ * acima: outra matéria saiu creditada "G1 — Brasil" — só que dessa vez não
+ * foi a IA que extraiu "G1" do texto (o filtro acima já barra isso). O
+ * problema era outro: a fonte de COLETA é literalmente cadastrada como "G1
+ * — Brasil" (fontes_monitoradas, RSS direto do g1.globo.com), e o caminho 2
+ * de calcularCreditoPublico() (fallback pros nomes das fontes de coleta)
+ * usava só o campo `creditar_publicamente` do banco pra decidir — que,
+ * nesse caso, não estava marcado `false` (migração antiga que deveria ter
+ * marcado isso nunca rodou no banco). Ou seja: o código dependia 100% de
+ * alguém ter rodado a migração certa no SQL Editor pra essa trava funcionar
+ * — exatamente o tipo de dependência frágil que a Trava de Geografia em
+ * código (images.ts/pipeline.ts) já tinha abandonado antes. Esta função
+ * agora checa o NOME da fonte contra a mesma lista de veículos bloqueados,
+ * em código — funciona mesmo que o `creditar_publicamente` do banco esteja
+ * errado ou a migração nunca tenha sido rodada.
+ */
+function contemVeiculoBloqueado(texto: string): boolean {
+  const normalizado = normalizarNome(texto);
+  return VEICULOS_IMPRENSA_BLOQUEADOS.some((v) => {
+    const escapado = v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const regex = new RegExp(`(^|[^a-z0-9])${escapado}([^a-z0-9]|$)`, "i");
+    return regex.test(normalizado);
+  });
+}
+
 function fontePrimariaValida(fontePrimaria: string | null | undefined): string | null {
   const limpa = fontePrimaria?.trim();
   if (!limpa) return null;
-  const normalizada = normalizarNome(limpa);
-  const ehVeiculoDeImprensa = VEICULOS_IMPRENSA_BLOQUEADOS.some(
-    (v) => normalizada === v || normalizada.startsWith(`${v} `) || normalizada.startsWith(`${v}-`) || normalizada.startsWith(`${v}—`)
-  );
-  return ehVeiculoDeImprensa ? null : limpa;
+  return contemVeiculoBloqueado(limpa) ? null : limpa;
 }
 
 /**
@@ -126,7 +148,12 @@ function fontePrimariaValida(fontePrimaria: string | null | undefined): string |
 function calcularCreditoPublico(fontePrimaria: string | null | undefined, fontes: Array<{ nome: string; creditarPublicamente: boolean }>): string | null {
   const primariaValida = fontePrimariaValida(fontePrimaria);
   if (primariaValida) return primariaValida;
-  return juntarNomes(fontes.filter((f) => f.creditarPublicamente).map((f) => f.nome));
+  // `f.creditarPublicamente` vem do banco (fontes_monitoradas.creditar_publicamente)
+  // e pode estar errado se a migração que deveria tê-lo marcado `false` nunca
+  // rodou — por isso o nome da própria fonte passa pelo MESMO filtro de
+  // veículo bloqueado usado acima, em código, nunca confiando só na flag do
+  // banco (ver comentário de contemVeiculoBloqueado).
+  return juntarNomes(fontes.filter((f) => f.creditarPublicamente && !contemVeiculoBloqueado(f.nome)).map((f) => f.nome));
 }
 
 /**
@@ -224,11 +251,34 @@ async function triarComCascata(item: ItemBruto): Promise<ResumoGemini | null> {
  * se a PRÓPRIA FONTE já está cadastrada como "brasil_mundo" (ou seja, é um
  * veículo nacional/internacional, tipo G1/Agência Brasil — ver
  * fontes_monitoradas.editoria_padrao), a matéria NUNCA pode sair como
- * "boa_vista"/"roraima" — se a triagem tentar, o sistema corrige sozinho na
- * hora e avisa o Valter na Central de Transparência, criando um registro de
- * auditoria de toda vez que isso for barrado.
+ * nenhuma editoria "local" — se a triagem tentar, o sistema corrige sozinho
+ * na hora e avisa o Valter na Central de Transparência, criando um registro
+ * de auditoria de toda vez que isso for barrado.
+ *
+ * Alcance ampliado em 23/11/2026: flagrado por Valter um caso real — uma
+ * matéria de "Detran-AP" (trânsito em Macapá/Amapá, G1 — Brasil) saiu
+ * classificada como "politica" em vez de "brasil_mundo". A trava original
+ * só olhava pra "boa_vista"/"roraima", mas TODAS as editorias temáticas
+ * deste portal (política, polícia, economia, esportes, saúde, educação,
+ * cultura, serviço ao cidadão) são, por desenho, sobre Roraima/Boa Vista —
+ * ver as fontes "Busca: Política", "Busca: Economia" etc., todas com o
+ * tema de busca explicitamente "em Roraima e Boa Vista". "brasil_mundo" é a
+ * ÚNICA editoria genuinamente nacional/internacional — por isso agora a
+ * trava usa "qualquer editoria que não seja brasil_mundo", em vez de uma
+ * lista manual de só duas, que deixava passar qualquer editoria temática.
  */
-const EDITORIAS_LOCAIS: Editoria[] = ["boa_vista", "roraima"];
+const EDITORIAS_LOCAIS: Editoria[] = [
+  "boa_vista",
+  "roraima",
+  "policia",
+  "politica",
+  "economia",
+  "esportes",
+  "servico_cidadao",
+  "saude",
+  "educacao",
+  "cultura",
+];
 
 async function travarEditoriaForaDeRoraima(item: ItemBruto, resumo: ResumoGemini): Promise<void> {
   if (item.editoriaPadrao !== "brasil_mundo") return;
