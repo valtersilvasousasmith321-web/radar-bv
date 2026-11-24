@@ -232,6 +232,7 @@ async function triarComCascata(item: ItemBruto): Promise<ResumoGemini | null> {
 
   await travarEditoriaForaDeRoraima(item, resumo);
   await travarPorMencaoDeOutroEstado(item, resumo);
+  await travarPorMencaoDePaisEstrangeiro(item, resumo);
   await travarBuscaSemMencaoDeRoraima(item, resumo);
 
   return resumo;
@@ -400,6 +401,117 @@ async function travarPorMencaoDeOutroEstado(item: ItemBruto, resumo: ResumoGemin
       "Editor-chefe",
       `Travei uma classificação errada antes de publicar: a triagem sugeriu "${editoriaErrada}" pra uma matéria de "${item.fonteNome}" que menciona "${estadoEncontrado}" — outro estado, não Roraima. Mesmo a fonte estando cadastrada com editoria local (ela é do tipo "Busca", que pesquisa o tema na web e às vezes traz resultado de fora), o texto da própria matéria não é daqui. Troquei a editoria pra "brasil_mundo" automaticamente.`,
       { fonte: item.fonteNome, url: item.url, editoriaSugeridaPelaIA: editoriaErrada, estadoEncontrado, marcador }
+    );
+  }
+}
+
+/**
+ * Nomes de países estrangeiros (nunca o Brasil) usados só pra detectar
+ * menção a fato ocorrido fora do país. Cobre os mais comuns em notícia
+ * internacional (política, conflitos, acidentes) — não precisa ser
+ * exaustiva, só ampla o bastante pra pegar os casos reais que já escaparam.
+ */
+const PAISES_ESTRANGEIROS = [
+  "Estados Unidos",
+  "EUA",
+  "Israel",
+  "Irã",
+  "Iraque",
+  "Palestina",
+  "Gaza",
+  "Líbano",
+  "Síria",
+  "Ucrânia",
+  "Rússia",
+  "China",
+  "Argentina",
+  "Chile",
+  "Uruguai",
+  "Paraguai",
+  "Bolívia",
+  "Peru",
+  "Colômbia",
+  "Venezuela",
+  "Equador",
+  "México",
+  "Portugal",
+  "Espanha",
+  "França",
+  "Alemanha",
+  "Itália",
+  "Reino Unido",
+  "Inglaterra",
+  "Japão",
+  "Coreia do Sul",
+  "Coreia do Norte",
+  "Índia",
+  "Austrália",
+  "Canadá",
+  "Emirados Árabes Unidos",
+  "Arábia Saudita",
+  "Catar",
+  "Egito",
+  "África do Sul",
+  "Nigéria",
+  "Turquia",
+  "Afeganistão",
+  "Paquistão",
+];
+
+/**
+ * Quinta Trava de Geografia (flagrado por Valter em 24/11/2026: matérias
+ * sobre o Ministro da Defesa de Israel/armas químicas no Irã, e sobre um
+ * acidente de ônibus em Ras Al Khaimah/Emirados Árabes Unidos, saíram
+ * publicadas como "Política" e "Polícia" — ilustradas, no primeiro caso,
+ * com uma foto REAL de um imóvel de Boa Vista, dando a entender que o fato
+ * foi aqui).
+ *
+ * A trava de outro-estado (acima) só detecta nome de ESTADO BRASILEIRO —
+ * um fato 100% internacional nunca menciona nenhum, então passa reto por
+ * ela. E a trava por exigência positiva (abaixo) só roda pra fonteTipo
+ * "busca" — essas duas matérias vieram de fonte tipo RSS (G1 — Mundo), não
+ * de busca, então nenhuma das travas existentes olhava o conteúdo delas.
+ *
+ * Esta trava funciona igual à de outro-estado, mas procurando nome de PAÍS
+ * ESTRANGEIRO no texto, e roda pra QUALQUER tipo de fonte (sem a restrição
+ * de "só busca") — porque o problema aqui não é a busca abrir buscar fora,
+ * é um RSS que agrega conteúdo nacional/internacional (G1) vindo cadastrado
+ * com editoria_padrao local em vez de "brasil_mundo".
+ */
+async function travarPorMencaoDePaisEstrangeiro(item: ItemBruto, resumo: ResumoGemini): Promise<void> {
+  if (!EDITORIAS_LOCAIS.includes(resumo.editoriaSugerida)) return;
+
+  const textoCompleto = normalizarTexto(`${item.tituloOriginal} ${item.conteudoBruto} ${resumo.topicos.join(" ")}`);
+  if (/\broraima\b/.test(textoCompleto)) {
+    // Mesma cautela da trava de outro-estado: se o texto já cita Roraima,
+    // não aplica por menção isolada de país — pode ser comparação/contexto
+    // de uma matéria que é mesmo local.
+    return;
+  }
+
+  const paisEncontrado = PAISES_ESTRANGEIROS.find((pais) => {
+    const normalizado = normalizarTexto(pais);
+    const regex = new RegExp(`\\b${normalizado.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
+    return regex.test(textoCompleto);
+  });
+  if (!paisEncontrado) return;
+
+  const editoriaErrada = resumo.editoriaSugerida;
+  resumo.editoriaSugerida = "brasil_mundo";
+
+  await log("warning", "pipeline", "Trava de Geografia (país estrangeiro) corrigiu classificação indevida pra editoria local", {
+    fonte: item.fonteNome,
+    url: item.url,
+    editoriaSugeridaPelaIA: editoriaErrada,
+    paisEncontrado,
+  });
+
+  const marcador = `trava-geografia-pais-${item.fonteId}-${new Date().toISOString().slice(0, 10)}`;
+  if (!(await jaInformouHoje("Editor-chefe", marcador))) {
+    await informar(
+      "Editor-chefe",
+      `Travei uma classificação errada antes de publicar: a triagem sugeriu "${editoriaErrada}" pra uma matéria de "${item.fonteNome}" que menciona "${paisEncontrado}" — fato ocorrido fora do Brasil. Essa fonte não é do tipo "Busca" (é RSS/agregador), mas mesmo assim o conteúdo claramente não é local. Troquei a editoria pra "brasil_mundo" automaticamente — isso também evita usar foto real de Boa Vista pra ilustrar um fato de outro país.`,
+      { fonte: item.fonteNome, url: item.url, editoriaSugeridaPelaIA: editoriaErrada, paisEncontrado, marcador }
     );
   }
 }
