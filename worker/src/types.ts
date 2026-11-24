@@ -56,6 +56,13 @@ export interface ItemBruto {
   publicadoEm?: string;
   /** Herdado de FonteMonitorada.creditar_publicamente — ver comentário lá. */
   creditarPublicamente: boolean;
+  /**
+   * Herdado de FonteMonitorada.tipo. Usado na Trava de Geografia (pipeline.ts)
+   * para exigir menção explícita a Roraima/Boa Vista só em itens vindos de
+   * fonte tipo "busca" (pesquisa aberta via IA, sem URL fixa — a única que
+   * comprovadamente pode trazer resultado de fora mesmo com editoria local).
+   */
+  fonteTipo: TipoFonte;
 }
 
 /** Saída da Triagem do Gemini — fatos essenciais mastigados, sem redação final */

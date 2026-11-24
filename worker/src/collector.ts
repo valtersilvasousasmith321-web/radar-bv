@@ -130,6 +130,7 @@ async function coletarRss(fonte: FonteMonitorada): Promise<ItemBruto[]> {
     editoriaPadrao: fonte.editoria_padrao,
     publicadoEm: item.pubDate,
     creditarPublicamente: fonte.creditar_publicamente,
+    fonteTipo: fonte.tipo,
   }));
 }
 
@@ -412,6 +413,7 @@ async function coletarPdf(fonte: FonteMonitorada): Promise<ItemBruto[]> {
         conteudoBruto: texto,
         editoriaPadrao: fonte.editoria_padrao,
         creditarPublicamente: fonte.creditar_publicamente,
+        fonteTipo: fonte.tipo,
       };
     })
   );
@@ -487,6 +489,7 @@ async function coletarResumoServico(fonte: FonteMonitorada): Promise<ItemBruto[]
       conteudoBruto: resumo.texto,
       editoriaPadrao: fonte.editoria_padrao,
       creditarPublicamente: fonte.creditar_publicamente,
+      fonteTipo: fonte.tipo,
     },
   ];
 }
@@ -511,6 +514,7 @@ async function coletarBusca(fonte: FonteMonitorada): Promise<ItemBruto[]> {
         conteudoBruto: extrairTextoPrincipal(htmlArtigo, url),
         editoriaPadrao: fonte.editoria_padrao,
         creditarPublicamente: fonte.creditar_publicamente,
+        fonteTipo: fonte.tipo,
       };
     })
   );
@@ -550,6 +554,7 @@ async function coletarHtml(fonte: FonteMonitorada): Promise<ItemBruto[]> {
         conteudoBruto: extrairTextoPrincipal(html, fonte.url_base),
         editoriaPadrao: fonte.editoria_padrao,
         creditarPublicamente: fonte.creditar_publicamente,
+        fonteTipo: fonte.tipo,
       },
     ];
   }
@@ -570,6 +575,7 @@ async function coletarHtml(fonte: FonteMonitorada): Promise<ItemBruto[]> {
         conteudoBruto: extrairTextoPrincipal(htmlArtigo, url),
         editoriaPadrao: fonte.editoria_padrao,
         creditarPublicamente: fonte.creditar_publicamente,
+        fonteTipo: fonte.tipo,
       };
     })
   );

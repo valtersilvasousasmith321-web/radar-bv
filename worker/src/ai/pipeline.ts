@@ -232,6 +232,7 @@ async function triarComCascata(item: ItemBruto): Promise<ResumoGemini | null> {
 
   await travarEditoriaForaDeRoraima(item, resumo);
   await travarPorMencaoDeOutroEstado(item, resumo);
+  await travarBuscaSemMencaoDeRoraima(item, resumo);
 
   return resumo;
 }
@@ -403,6 +404,118 @@ async function travarPorMencaoDeOutroEstado(item: ItemBruto, resumo: ResumoGemin
   }
 }
 
+/** Os 15 municípios de Roraima — usado só pra RECONHECER conteúdo local. */
+const MUNICIPIOS_RORAIMA = [
+  "Alto Alegre",
+  "Amajari",
+  "Boa Vista",
+  "Bonfim",
+  "Cantá",
+  "Caracaraí",
+  "Caroebe",
+  "Iracema",
+  "Mucajaí",
+  "Normandia",
+  "Pacaraima",
+  "Rorainópolis",
+  "São João da Baliza",
+  "São Luiz",
+  "Uiramutã",
+];
+
+/**
+ * Terceira Trava de Geografia (flagrado por Valter em 24/11/2026, mesmo dia
+ * da segunda trava acima — 3 matérias escaparam dela: "Patos de Minas" não
+ * citava "Minas Gerais" por extenso, só o nome do município, e duas eram
+ * notícia puramente internacional (Pentágono/EUA, El Niño no Pacífico/EUA),
+ * sem citar NENHUM estado brasileiro pra travar em cima. A trava de cima
+ * (travarPorMencaoDeOutroEstado) é uma lista negativa — só pega quando
+ * acerta o nome exato de outro estado — e por isso tem brecha estrutural:
+ * qualquer fato que não cite nenhum estado brasileiro (internacional, ou
+ * cidade sem o nome do estado junto) passa reto por ela.
+ *
+ * Esta trava inverte a lógica pra uma exigência POSITIVA, sem essa brecha:
+ * uma fonte do tipo "busca" só pode entregar editoria local (política,
+ * polícia, economia etc.) se o próprio texto mencionar Roraima, Boa Vista
+ * ou um dos outros 14 municípios do estado. Não há lista de "o que
+ * bloquear" pra manter atualizada — não importa se é Minas, EUA ou
+ * qualquer lugar nunca listado, se não fala de Roraima, vira "brasil_mundo".
+ *
+ * Restrita a fonteTipo === "busca" de propósito: fontes RSS/HTML são URL
+ * fixa de veículo local já escolhido a dedo (Folha de Boa Vista, PCRR,
+ * Prefeitura etc.) — uma nota curta de agenda pode não repetir "Roraima"
+ * ou "Boa Vista" no texto e isso é normal, não indica erro de fonte.
+ * "Busca" é o único tipo sem URL fixa (pesquisa aberta via IA) e o único
+ * com casos reais comprovados de trazer resultado de fora.
+ */
+async function travarBuscaSemMencaoDeRoraima(item: ItemBruto, resumo: ResumoGemini): Promise<void> {
+  if (item.fonteTipo !== "busca") return;
+  if (!EDITORIAS_LOCAIS.includes(resumo.editoriaSugerida)) return;
+
+  const textoCompleto = normalizarTexto(`${item.tituloOriginal} ${item.conteudoBruto} ${resumo.topicos.join(" ")}`);
+
+  const mencionaRoraima = /\broraima\b/.test(textoCompleto);
+  const mencionaMunicipio = MUNICIPIOS_RORAIMA.some((municipio) => {
+    const normalizado = normalizarTexto(municipio);
+    const regex = new RegExp(`\\b${normalizado.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
+    return regex.test(textoCompleto);
+  });
+  if (mencionaRoraima || mencionaMunicipio) return;
+
+  const editoriaErrada = resumo.editoriaSugerida;
+  resumo.editoriaSugerida = "brasil_mundo";
+
+  await log("warning", "pipeline", "Trava de Geografia (exigência positiva) corrigiu classificação indevida pra editoria local", {
+    fonte: item.fonteNome,
+    url: item.url,
+    editoriaSugeridaPelaIA: editoriaErrada,
+  });
+
+  const marcador = `trava-geografia-positiva-${item.fonteId}-${new Date().toISOString().slice(0, 10)}`;
+  if (!(await jaInformouHoje("Editor-chefe", marcador))) {
+    await informar(
+      "Editor-chefe",
+      `Travei uma classificação errada antes de publicar: a triagem sugeriu "${editoriaErrada}" pra uma matéria de "${item.fonteNome}" (fonte do tipo "Busca") que não menciona Roraima, Boa Vista nem nenhum outro município do estado em nenhum momento do texto. Como essa editoria é só pra conteúdo local, troquei pra "brasil_mundo" automaticamente — mesmo sem citar outro estado específico, o fato simplesmente não é daqui.`,
+      { fonte: item.fonteNome, url: item.url, editoriaSugeridaPelaIA: editoriaErrada, marcador }
+    );
+  }
+}
+
+/**
+ * Quarta Trava de Geografia — a mais importante de todas, descoberta ao
+ * investigar por que as 3 anteriores (todas na TRIAGEM) não bastaram: a
+ * triagem corrige `resumo.editoriaSugerida` certinho, mas esse valor
+ * corrigido era passado pro Redator só como TEXTO DENTRO DO PROMPT
+ * ("editoriaSugerida: X") — uma sugestão, não uma ordem. O Redator (a IA que
+ * escreve a matéria final) devolve seu PRÓPRIO campo `editoria` no JSON de
+ * saída, e nada no código obrigava esse campo a bater com o que a triagem já
+ * tinha decidido. Ou seja: mesmo com a editoria corrigida 3x na triagem, o
+ * Redator podia simplesmente ignorar a sugestão e escolher de novo por conta
+ * própria — e foi exatamente isso que aconteceu com "Pentágono/drones",
+ * "El Niño/EUA" e "Patos de Minas" (24/11/2026): a triagem até pode ter
+ * sugerido certo ou errado, mas o Redator tinha a palavra final de fato, sem
+ * nenhuma trava decidindo por cima dele.
+ *
+ * Esta função fecha esse buraco pra sempre: depois que o Redator termina de
+ * escrever, SOBRESCREVE `materia.editoria` com o valor que a triagem (já
+ * passada pelas 3 travas de geografia acima) decidiu — sem perguntar, sem
+ * exceção. O Redator continua livre pra escrever título, texto, tags; a
+ * editoria nunca mais é opinião dele.
+ */
+async function travarEditoriaDaRedacao(materia: MateriaRedigida, editoriaTravada: Editoria, item: ItemBruto): Promise<void> {
+  if (materia.editoria === editoriaTravada) return;
+
+  const editoriaDoRedator = materia.editoria;
+  materia.editoria = editoriaTravada;
+
+  await log("warning", "pipeline", "Trava de Geografia (redação) corrigiu editoria que o Redator tinha trocado por conta própria", {
+    fonte: item.fonteNome,
+    url: item.url,
+    editoriaDecididaNaTriagem: editoriaTravada,
+    editoriaEscolhidaPeloRedator: editoriaDoRedator,
+  });
+}
+
 /**
  * Redação-Chefe com Fallback em cascata — Gemini -> Groq -> OpenRouter ->
  * Mistral -> Cohere -> Claude — fonte única.
@@ -542,6 +655,8 @@ export async function processarItem(item: ItemBruto): Promise<ResultadoPipeline 
     return null;
   }
 
+  await travarEditoriaDaRedacao(resultado.materia, resumo.editoriaSugerida, item);
+
   await log("info", "pipeline", `Matéria redigida com sucesso via ${resultado.origemIA}`, { url: item.url, titulo: resultado.materia.titulo });
 
   return {
@@ -596,6 +711,7 @@ export async function processarItemMultiFonte(
       await log("critico", "pipeline", "Todas as IAs da bancada falharam (grupo multi-fonte reduzido a 1 item) — descartado", { url: item.url });
       return null;
     }
+    await travarEditoriaDaRedacao(resultado.materia, resumo.editoriaSugerida, item);
     return {
       materia: resultado.materia,
       origemIA: resultado.origemIA,
@@ -626,6 +742,8 @@ export async function processarItemMultiFonte(
   const principal = apuracoes[0];
   const nomes = apuracoes.map((a) => a.item.fonteNome);
   const fonteCreditoFormatado = juntarNomes(nomes) ?? nomes[0];
+
+  await travarEditoriaDaRedacao(resultado.materia, principal.resumo.editoriaSugerida, principal.item);
 
   await log("info", "pipeline", `Matéria multi-fonte redigida com sucesso via ${resultado.origemIA}`, { fontes: nomes, titulo: resultado.materia.titulo });
 
