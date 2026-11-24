@@ -99,6 +99,17 @@ export interface ResultadoImagem {
   url: string;
   credito: string;
   eFallback: boolean;
+  /**
+   * Descrição do QUE a foto mostra de verdade (alt-text do banco de imagem,
+   * ou a descrição cadastrada no banco próprio). Corrigido em 24/11/2026:
+   * antes essa informação era descartada ao sair de images.ts, e o Revisor
+   * Camada 2 (a checagem final antes de publicar) recebia só o crédito
+   * ("Foto: Fulano / Unsplash") — nome do fotógrafo não diz o que está
+   * retratado, então o revisor não tinha como saber se a foto combinava com
+   * a matéria. Ausente (undefined) só pra imagem institucional de fallback,
+   * que o Revisor já trata à parte (nunca precisa bater com o assunto).
+   */
+  descricao?: string;
 }
 
 export type TipoDestinoWhatsApp = "grupo" | "canal";

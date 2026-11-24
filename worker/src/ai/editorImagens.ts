@@ -123,13 +123,21 @@ async function perguntarClaude(prompt: string): Promise<number | null> {
  * fraco. Agora devolve `confiavel: false` nesses casos, pra o Pesquisador de
  * Imagem (abaixo) poder tentar um ângulo de busca diferente antes de aceitar
  * uma foto que a própria IA avisou que não combina bem.
+ *
+ * Correção de 24/11/2026 (Valter flagrou matéria da Ariana Grande ilustrada
+ * com foto de ema, entre outras): havia um atalho aqui que, quando a busca
+ * só trazia 0 ou 1 candidata (comum em palavra-chave rara/específica — e
+ * portanto JUSTAMENTE o caso mais arriscado de dar errado), pulava a IA
+ * inteira e devolvia `confiavel: true` sem NENHUMA verificação real — uma
+ * foto péssima, sozinha na lista, passava direto. Verificar com 1 candidata
+ * só é tão barato quanto com várias (é a mesma pergunta — "essa foto bate de
+ * verdade?" — só que com 1 opção em vez de N), então agora SEMPRE roda a IA,
+ * não importa quantas candidatas vieram.
  */
 export async function escolherMelhorImagem(
   candidatos: CandidatoImagem[],
   contextoMateria: string,
 ): Promise<{ escolhida: CandidatoImagem; confiavel: boolean }> {
-  if (candidatos.length <= 1) return { escolhida: candidatos[0], confiavel: true };
-
   let indice: number | null = null;
 
   if (estaDisponivel("groq")) indice = await perguntarGroq(montarPrompt(contextoMateria, candidatos));

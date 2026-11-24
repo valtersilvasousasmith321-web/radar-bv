@@ -299,7 +299,7 @@ async function buscarImagemBancoProprio(
     const verificacao = await validarImagemBancoProprio(candidata.descricao ?? "", { ...materia, editoria });
     if (verificacao.aprovado) {
       await marcarImagemComoUsada(candidata.id);
-      return { url: candidata.url, credito: "Foto: Radar BV", eFallback: false };
+      return { url: candidata.url, credito: "Foto: Radar BV", eFallback: false, descricao: candidata.descricao ?? undefined };
     }
   }
 
@@ -411,5 +411,5 @@ async function buscarMelhorCandidatoLivre(palavraChave: string, textoParaCasar: 
   const { escolhida, confiavel } = await escolherMelhorImagem(candidatos, textoParaCasar);
   if (!confiavel) return null;
 
-  return { url: escolhida.url, credito: escolhida.credito, eFallback: false };
+  return { url: escolhida.url, credito: escolhida.credito, eFallback: false, descricao: escolhida.descricao || undefined };
 }

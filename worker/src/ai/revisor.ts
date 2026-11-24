@@ -88,20 +88,39 @@ function extrairJson<T>(texto: string): T {
   }
 }
 
-function montarPrompt(materia: MateriaRedigida, imagemCredito: string, imagemEFallback: boolean): string {
+function montarPrompt(
+  materia: MateriaRedigida,
+  imagemCredito: string,
+  imagemEFallback: boolean,
+  imagemDescricao: string | undefined,
+): string {
+  // Corrigido em 24/11/2026 (Valter flagrou matéria da Ariana Grande com
+  // foto de ema, entre outras): antes este prompt só recebia o CRÉDITO da
+  // imagem ("Foto: Fulano / Unsplash") — nome de fotógrafo/banco não diz o
+  // que está retratado na foto, então esta checagem nunca teve como saber
+  // se a imagem combinava com a matéria, apesar do item 3 abaixo já pedir
+  // isso desde antes. Agora recebe a DESCRIÇÃO real do que a foto mostra
+  // (alt-text do banco de imagem, ou a descrição cadastrada no banco
+  // próprio) — só assim dá pra checar de verdade.
+  const infoImagem = imagemEFallback
+    ? "imagem institucional padrão (fallback — não precisa bater com o assunto)"
+    : imagemDescricao
+      ? `o que a foto mostra: "${imagemDescricao}" (crédito: ${imagemCredito})`
+      : `SEM DESCRIÇÃO DISPONÍVEL pra esta foto (crédito: ${imagemCredito}) — reprove por precaução se o assunto da matéria for específico o bastante pra uma foto genérica/errada ser perceptível (ex: um evento, local ou pessoa específicos)`;
+
   return `Você é o Revisor/Copydesk do Radar BV, portal de notícias de Boa Vista/Roraima. Esta é a ÚLTIMA checagem antes da matéria ir pro ar — um olhar de revisor humano experiente, não um corretor automático de português.
 
 Avalie:
 1. SENTIDO: o texto faz sentido de ponta a ponta? Título e corpo falam da mesma coisa? Não tem frase quebrada, repetida ou contraditória?
 2. TOM: a linguagem é jornalística e sóbria, sem sensacionalismo/clickbait, sem adjetivo alarmista gratuito?
-3. FOTO: a legenda/crédito da imagem escolhida faz sentido com o assunto da matéria, ou parece completamente fora de contexto?
+3. FOTO: compare o que a foto REALMENTE mostra (abaixo) com o assunto de verdade da matéria — não aprove só porque uma palavra solta bate (ex: a matéria menciona "governo" e a foto mostra QUALQUER prédio público, ou a matéria é sobre uma cantora e a foto mostra um animal) — tem que ser uma cena coerente com o fato específico narrado, não uma categoria genérica.
 
 MATÉRIA:
 Título: ${materia.titulo}
 Subtítulo: ${materia.subtitulo}
 Corpo: ${materia.conteudo}
 
-IMAGEM ESCOLHIDA: ${imagemEFallback ? "imagem institucional padrão (fallback — não precisa bater com o assunto)" : imagemCredito}
+IMAGEM ESCOLHIDA: ${infoImagem}
 
 Responda SOMENTE com um JSON válido, sem comentários, sem markdown, no formato exato:
 {"aprovado": boolean, "motivo": "string curta explicando a decisão"}
@@ -175,8 +194,9 @@ export async function revisarCamada2(
   materia: MateriaRedigida,
   imagemCredito: string,
   imagemEFallback: boolean,
+  imagemDescricao?: string,
 ): Promise<ResultadoCamada2> {
-  const prompt = montarPrompt(materia, imagemCredito, imagemEFallback);
+  const prompt = montarPrompt(materia, imagemCredito, imagemEFallback, imagemDescricao);
 
   let resultado: ResultadoCamada2 | null = null;
   if (estaDisponivel("groq")) resultado = await perguntarGroq(prompt);

@@ -120,7 +120,7 @@ export async function agendarPublicacao(resultado: ResultadoPipeline, fonteId: s
   // Camada 2 — IA leve, sempre roda (só ela pega erro de sentido/tom/foto
   // incoerente). Se reprovar, a matéria não é perdida: cai como rascunho
   // pra revisão humana em vez de publicar algo com problema real.
-  const revisao = await revisarCamada2(materia, imagem.credito, imagem.eFallback);
+  const revisao = await revisarCamada2(materia, imagem.credito, imagem.eFallback, imagem.descricao);
   if (!revisao.aprovado) {
     await log("warning", "revisor", "Camada 2 reprovou a matéria — enviando como rascunho pra revisão humana", {
       titulo: materia.titulo,
