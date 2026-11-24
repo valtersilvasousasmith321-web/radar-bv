@@ -231,6 +231,7 @@ async function triarComCascata(item: ItemBruto): Promise<ResumoGemini | null> {
   }
 
   await travarEditoriaForaDeRoraima(item, resumo);
+  await travarPorMencaoDeOutroEstado(item, resumo);
 
   return resumo;
 }
@@ -302,6 +303,102 @@ async function travarEditoriaForaDeRoraima(item: ItemBruto, resumo: ResumoGemini
       "Editor-chefe",
       `Travei uma classificação errada antes de publicar: a triagem sugeriu "${editoriaErrada}" pra uma matéria vinda de "${item.fonteNome}" — uma fonte que já está cadastrada como nacional/internacional ("brasil_mundo"), não de Roraima. Troquei a editoria pra "brasil_mundo" automaticamente, pra matéria de fora nunca sair classificada como se fosse local (isso também evita usar foto real de Boa Vista pra ilustrar um fato de outro lugar).`,
       { fonte: item.fonteNome, url: item.url, editoriaSugeridaPelaIA: editoriaErrada, marcador }
+    );
+  }
+}
+
+/**
+ * Nomes completos de outros estados brasileiros (nunca nomes de cidade
+ * isolados — ver comentário abaixo do porquê). Usado só pra detectar
+ * menção a OUTRO estado; "Roraima" nunca entra aqui.
+ */
+const OUTROS_ESTADOS = [
+  "Amapá",
+  "Amazonas",
+  "Pará",
+  "Acre",
+  "Rondônia",
+  "Tocantins",
+  "Maranhão",
+  "Piauí",
+  "Ceará",
+  "Rio Grande do Norte",
+  "Paraíba",
+  "Pernambuco",
+  "Alagoas",
+  "Sergipe",
+  "Bahia",
+  "Minas Gerais",
+  "Espírito Santo",
+  "Rio de Janeiro",
+  "São Paulo",
+  "Paraná",
+  "Santa Catarina",
+  "Rio Grande do Sul",
+  "Mato Grosso do Sul",
+  "Mato Grosso",
+  "Goiás",
+  "Distrito Federal",
+];
+
+function normalizarTexto(texto: string): string {
+  return texto
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "");
+}
+
+/**
+ * Segunda Trava de Geografia (flagrado por Valter em 24/11/2026 — matéria
+ * de resgate de jacaré em Macapá/AP saiu publicada como "Polícia", com
+ * crédito "G1 — Brasil", mesmo depois da trava acima já existir). A trava
+ * original só corrige quando a PRÓPRIA FONTE está cadastrada como
+ * "brasil_mundo" — mas essa matéria veio de uma fonte tipo "Busca" já
+ * cadastrada com editoria local (ex: "Busca: Polícia"), cujo tema de
+ * pesquisa é "notícias de polícia em Roraima" mas que, na prática, a IA de
+ * busca às vezes traz resultado de fora (mesmo instruída a não trazer).
+ * Ou seja: confiar só na editoria_padrao da fonte não basta quando a
+ * fonte é "busca" (pesquisa aberta, sem URL fixa) — por isso esta segunda
+ * trava olha o CONTEÚDO em si (título + texto bruto + tópicos apurados),
+ * não a fonte, e barra sempre que o fato menciona outro estado brasileiro
+ * por extenso. Evita adivinhar por nome de cidade (ex: "Rio Branco" é
+ * cidade do Acre E também avenida principal de Boa Vista — colidiria),
+ * usando só nome de ESTADO completo, que não tem esse risco de colisão.
+ */
+async function travarPorMencaoDeOutroEstado(item: ItemBruto, resumo: ResumoGemini): Promise<void> {
+  if (!EDITORIAS_LOCAIS.includes(resumo.editoriaSugerida)) return;
+
+  const textoCompleto = normalizarTexto(`${item.tituloOriginal} ${item.conteudoBruto} ${resumo.topicos.join(" ")}`);
+  if (/\broraima\b/.test(textoCompleto)) {
+    // Se o próprio texto já cita "Roraima" explicitamente, não aplica esta
+    // trava por nome de estado isolado — evita falso positivo de matéria
+    // que compara/menciona outro estado de passagem mas é mesmo local.
+    return;
+  }
+
+  const estadoEncontrado = OUTROS_ESTADOS.find((estado) => {
+    const normalizado = normalizarTexto(estado);
+    const regex = new RegExp(`\\b${normalizado.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
+    return regex.test(textoCompleto);
+  });
+  if (!estadoEncontrado) return;
+
+  const editoriaErrada = resumo.editoriaSugerida;
+  resumo.editoriaSugerida = "brasil_mundo";
+
+  await log("warning", "pipeline", "Trava de Geografia (por conteúdo) corrigiu classificação indevida pra editoria local", {
+    fonte: item.fonteNome,
+    url: item.url,
+    editoriaSugeridaPelaIA: editoriaErrada,
+    estadoEncontrado,
+  });
+
+  const marcador = `trava-geografia-conteudo-${item.fonteId}-${new Date().toISOString().slice(0, 10)}`;
+  if (!(await jaInformouHoje("Editor-chefe", marcador))) {
+    await informar(
+      "Editor-chefe",
+      `Travei uma classificação errada antes de publicar: a triagem sugeriu "${editoriaErrada}" pra uma matéria de "${item.fonteNome}" que menciona "${estadoEncontrado}" — outro estado, não Roraima. Mesmo a fonte estando cadastrada com editoria local (ela é do tipo "Busca", que pesquisa o tema na web e às vezes traz resultado de fora), o texto da própria matéria não é daqui. Troquei a editoria pra "brasil_mundo" automaticamente.`,
+      { fonte: item.fonteNome, url: item.url, editoriaSugeridaPelaIA: editoriaErrada, estadoEncontrado, marcador }
     );
   }
 }
