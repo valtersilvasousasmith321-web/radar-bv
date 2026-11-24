@@ -55,6 +55,7 @@ export interface FotoBanco {
   caminho_storage: string;
   descricao: string | null;
   editoria: Editoria | null;
+  credito: string | null;
   enviada_por: string | null;
   criado_em: string;
 }

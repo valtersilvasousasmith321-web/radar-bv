@@ -40,12 +40,18 @@ export async function atualizarNoticia(id: string, formData: FormData): Promise<
       redirect(`/admin/noticias/${id}?erro=${encodeURIComponent(mensagem)}`);
     }
   } else if (fotoBancoId) {
-    // 2) Escolhendo uma foto já existente no banco de fotos.
-    const { data: foto } = await supabaseAdmin().from("banco_fotos").select("url").eq("id", fotoBancoId).maybeSingle();
+    // 2) Escolhendo uma foto já existente no banco de fotos. Se o crédito
+    // dessa foto já tiver sido guardado no banco de fotos e o Valter não
+    // digitar outro aqui, usa o crédito guardado — não precisa redigitar.
+    const { data: foto } = await supabaseAdmin()
+      .from("banco_fotos")
+      .select("url, credito")
+      .eq("id", fotoBancoId)
+      .maybeSingle();
     if (foto?.url) {
       dados.imagem_url = foto.url;
       dados.imagem_e_fallback = false;
-      dados.imagem_credito = novoCredito || null;
+      dados.imagem_credito = novoCredito || foto.credito || null;
     }
   } else if (novoCredito) {
     // Só o crédito mudou, sem trocar a foto.
@@ -83,7 +89,7 @@ export async function criarNoticiaManual(formData: FormData): Promise<void> {
   const editoria = String(formData.get("editoria") ?? "").trim() as Editoria;
   const destaque = formData.get("destaque") === "on";
   const urgente = formData.get("urgente") === "on";
-  const creditoFoto = String(formData.get("imagem_credito") ?? "").trim();
+  let creditoFoto = String(formData.get("imagem_credito") ?? "").trim();
   const fotoBancoId = String(formData.get("foto_banco_id") ?? "").trim();
   const arquivoFoto = formData.get("foto");
 
@@ -99,8 +105,13 @@ export async function criarNoticiaManual(formData: FormData): Promise<void> {
       redirect(`/admin/noticias/nova?erro=${encodeURIComponent(mensagem)}`);
     }
   } else if (fotoBancoId) {
-    const { data: foto } = await supabaseAdmin().from("banco_fotos").select("url").eq("id", fotoBancoId).maybeSingle();
+    const { data: foto } = await supabaseAdmin()
+      .from("banco_fotos")
+      .select("url, credito")
+      .eq("id", fotoBancoId)
+      .maybeSingle();
     imagemUrl = foto?.url ?? null;
+    if (!creditoFoto && foto?.credito) creditoFoto = foto.credito;
   }
 
   const slug = gerarSlug(titulo);

@@ -50,9 +50,28 @@ export default async function PaginaFotos({
             type="file"
             name="arquivo"
             accept="image/*"
-            required
             className="w-full text-sm text-slate-600 file:mr-3 file:py-2 file:px-3 file:rounded-md file:border-0 file:bg-slate-100 file:text-slate-700 file:font-semibold hover:file:bg-slate-200"
           />
+        </div>
+
+        <div className="flex items-center gap-3 text-xs text-slate-400">
+          <div className="flex-1 border-t border-slate-200" />
+          ou
+          <div className="flex-1 border-t border-slate-200" />
+        </div>
+
+        <div>
+          <label className="block text-sm font-semibold text-slate-700 mb-1">URL de uma imagem pública</label>
+          <input
+            type="url"
+            name="url_imagem"
+            placeholder="https://... (link direto da imagem — clique com o botão direito nela e escolha &quot;Copiar endereço da imagem&quot;)"
+            className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-esmeralda"
+          />
+          <p className="text-xs text-slate-400 mt-1">
+            Pra baixar foto de divulgação de um site público (ex: SESC, prefeitura, órgão do governo) sem precisar
+            baixar no computador e subir de novo.
+          </p>
         </div>
 
         <div>
@@ -62,6 +81,19 @@ export default async function PaginaFotos({
             placeholder='Ex: "Acidente na BR-174, km 12 — foto do local"'
             className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-esmeralda"
           />
+        </div>
+
+        <div>
+          <label className="block text-sm font-semibold text-slate-700 mb-1">Crédito da foto (opcional)</label>
+          <input
+            name="credito"
+            placeholder='Ex: "Foto: Divulgação/SESC-RR"'
+            className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-esmeralda"
+          />
+          <p className="text-xs text-slate-400 mt-1">
+            Fica guardado junto com a foto — quando você usar ela numa notícia, o crédito certo já vem preenchido
+            sozinho.
+          </p>
         </div>
 
         <div>
@@ -99,6 +131,7 @@ export default async function PaginaFotos({
               </div>
               <div className="p-3 flex flex-col gap-1.5 flex-1">
                 {foto.descricao && <p className="text-xs text-slate-700 line-clamp-2">{foto.descricao}</p>}
+                {foto.credito && <p className="text-[11px] text-slate-400 italic">{foto.credito}</p>}
                 {foto.editoria && <p className="text-[11px] text-slate-400">{foto.editoria}</p>}
                 <form action={excluirFoto.bind(null, foto.id)} className="mt-auto pt-1">
                   <BotaoConfirmar

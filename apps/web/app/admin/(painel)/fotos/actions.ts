@@ -4,30 +4,38 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { exigirLogin } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { enviarFotoParaStorage, excluirFotoDoStorage } from "@/lib/storage-fotos";
+import { enviarFotoParaStorage, baixarImagemDeUrlParaStorage, excluirFotoDoStorage } from "@/lib/storage-fotos";
 import type { Editoria } from "@/lib/types";
 
 export async function enviarFoto(formData: FormData): Promise<void> {
   await exigirLogin();
 
   const arquivo = formData.get("arquivo");
+  const urlImagem = String(formData.get("url_imagem") ?? "").trim();
   const descricao = String(formData.get("descricao") ?? "").trim();
+  const credito = String(formData.get("credito") ?? "").trim();
   const editoriaForm = String(formData.get("editoria") ?? "").trim();
   const editoria = (editoriaForm || null) as Editoria | null;
 
-  if (!(arquivo instanceof File) || arquivo.size === 0) {
+  const temArquivo = arquivo instanceof File && arquivo.size > 0;
+  if (!temArquivo && !urlImagem) {
     redirect("/admin/fotos?erro=sem_arquivo");
   }
 
   // Importante: `redirect()` do Next.js funciona lançando uma exceção
-  // especial por baixo dos panos — por isso o upload (que pode falhar de
-  // verdade) fica isolado num try/catch próprio, sem nenhum `redirect()` lá
-  // dentro, senão o catch abaixo acabaria "engolindo" o redirect como se
-  // fosse um erro comum.
+  // especial por baixo dos panos — por isso o upload/download (que pode
+  // falhar de verdade) fica isolado num try/catch próprio, sem nenhum
+  // `redirect()` lá dentro, senão o catch abaixo acabaria "engolindo" o
+  // redirect como se fosse um erro comum.
   let urlFoto: string;
   let caminhoFoto: string;
   try {
-    const resultado = await enviarFotoParaStorage(arquivo as File, "banco");
+    // Duas formas de trazer a foto, mutuamente exclusivas: um arquivo do
+    // computador/celular, ou uma URL de imagem pública (ex: foto de
+    // divulgação do SESC, de uma prefeitura) que o sistema baixa sozinho.
+    const resultado = temArquivo
+      ? await enviarFotoParaStorage(arquivo as File, "banco")
+      : await baixarImagemDeUrlParaStorage(urlImagem, "banco");
     urlFoto = resultado.url;
     caminhoFoto = resultado.caminho;
   } catch (e) {
@@ -41,6 +49,7 @@ export async function enviarFoto(formData: FormData): Promise<void> {
       url: urlFoto,
       caminho_storage: caminhoFoto,
       descricao: descricao || null,
+      credito: credito || null,
       editoria,
       enviada_por: "Valter",
     });
