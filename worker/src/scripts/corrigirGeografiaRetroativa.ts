@@ -27,11 +27,37 @@
  * casos assim, por exemplo depois de uma trava nova entrar no ar):
  *
  *   npm run corrigir-geografia
+ *
+ * Nota sobre o .env (25/11/2026): no computador do Valter, o arquivo .env de
+ * verdade (com as chaves do Supabase etc.) fica na RAIZ do projeto
+ * (radar-bv-windows\.env), um nível ACIMA da pasta worker/ — não dentro
+ * dela. O import "dotenv/config" normal (usado em config.ts) só olha a
+ * pasta de onde o comando foi rodado, então rodar este script de dentro de
+ * worker/ não achava o .env sozinho. Por isso aqui carregamos o .env
+ * explicitamente, tentando alguns locais possíveis, ANTES de importar
+ * qualquer módulo que dependa dele (db.ts/config.ts) — daí os imports de
+ * supabase/log/obterImagemParaMateria abaixo serem dinâmicos (import()), não
+ * estáticos: em módulo ES, todo import estático roda antes de qualquer outro
+ * código do arquivo, então um dotenv.config() escrito depois de um import
+ * estático chegaria tarde demais.
  */
-import { supabase } from "../db.js";
-import { log } from "../logger.js";
-import { obterImagemParaMateria } from "../images.js";
+import { existsSync } from "node:fs";
+import path from "node:path";
+import dotenv from "dotenv";
 import type { Editoria } from "../types.js";
+
+// __dirname (não import.meta.url) porque o projeto compila pra CommonJS.
+const diretorioDoScript = __dirname;
+const candidatosEnv = [
+  path.resolve(diretorioDoScript, "../../.env"), // worker/.env
+  path.resolve(diretorioDoScript, "../../../.env"), // raiz do projeto (ao lado da pasta worker) — onde o Valter guarda o .env de verdade
+  path.resolve(process.cwd(), ".env"), // fallback: pasta de onde o comando foi rodado
+];
+for (const candidato of candidatosEnv) {
+  if (existsSync(candidato)) {
+    dotenv.config({ path: candidato });
+  }
+}
 
 const EDITORIAS_LOCAIS: Editoria[] = [
   "boa_vista",
@@ -155,6 +181,14 @@ interface NoticiaRevisar {
 }
 
 async function main(): Promise<void> {
+  // Imports dinâmicos (não no topo do arquivo) de propósito — ver nota sobre
+  // o .env acima: esses módulos leem a configuração (Supabase etc.) assim
+  // que são carregados, então só podem ser importados DEPOIS do dotenv.config()
+  // já ter rodado.
+  const { supabase } = await import("../db.js");
+  const { log } = await import("../logger.js");
+  const { obterImagemParaMateria } = await import("../images.js");
+
   console.log("Correção retroativa de classificação geográfica — buscando notícias agendadas/publicadas...\n");
 
   const { data: noticias, error } = await supabase
