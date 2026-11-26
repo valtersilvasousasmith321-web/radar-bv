@@ -16,12 +16,16 @@
  * errada já gravada — PRA SEMPRE, mesmo com o código já corrigido.
  *
  * Este script varre as notícias já salvas (agendadas ou publicadas) e aplica
- * a MESMA lógica de detecção das Travas de Geografia atuais (pipeline.ts):
- * se o conteúdo menciona outro estado brasileiro ou um país estrangeiro, e
- * NÃO menciona Roraima, a editoria está errada — corrige pra "brasil_mundo"
- * e busca uma foto nova condizente (nunca do banco próprio, que é só fotos
- * reais de Boa Vista/Roraima — essa regra já existe em images.ts e passa a
- * valer de novo assim que a editoria estiver certa).
+ * a MESMA exigência POSITIVA da Trava de Geografia mais forte do pipeline
+ * (pipeline.ts, travarBuscaSemMencaoDeRoraima, alcance ampliado em
+ * 26/11/2026 pra valer pra qualquer tipo de fonte): uma matéria em editoria
+ * local (política, polícia, economia etc.) só é válida se o próprio texto
+ * mencionar Roraima, Boa Vista ou um dos outros 14 municípios do estado —
+ * sem essa menção, não importa se é Trump, Nvidia, Congo ou qualquer lugar
+ * nunca listado numa lista negativa, a editoria está errada. Corrige pra
+ * "brasil_mundo" e busca uma foto nova condizente (nunca do banco próprio,
+ * que é só fotos reais de Boa Vista/Roraima — essa regra já existe em
+ * images.ts e passa a valer de novo assim que a editoria estiver certa).
  *
  * Rodar manualmente (uma vez agora, e de novo sempre que desconfiar de mais
  * casos assim, por exemplo depois de uma trava nova entrar no ar):
@@ -151,6 +155,27 @@ const PAISES_ESTRANGEIROS = [
   "Paquistão",
 ];
 
+// Mantido idêntico ao array de mesmo nome em pipeline.ts — usado pra
+// exigência POSITIVA (a que realmente decide a correção): sem menção a
+// nenhum destes (nem "Roraima"), a editoria local está errada.
+const MUNICIPIOS_RORAIMA = [
+  "Alto Alegre",
+  "Amajari",
+  "Boa Vista",
+  "Bonfim",
+  "Cantá",
+  "Caracaraí",
+  "Caroebe",
+  "Iracema",
+  "Mucajaí",
+  "Normandia",
+  "Pacaraima",
+  "Rorainópolis",
+  "São João da Baliza",
+  "São Luiz",
+  "Uiramutã",
+];
+
 function normalizarTexto(texto: string): string {
   return texto
     .toLowerCase()
@@ -221,18 +246,24 @@ async function main(): Promise<void> {
       `${noticia.titulo ?? ""} ${noticia.subtitulo ?? ""} ${noticia.conteudo ?? ""} ${(noticia.tags ?? []).join(" ")}`,
     );
 
-    if (/\broraima\b/.test(textoCompleto)) continue;
-
-    const estadoEncontrado = encontrarMencao(textoCompleto, OUTROS_ESTADOS);
-    const paisEncontrado = !estadoEncontrado ? encontrarMencao(textoCompleto, PAISES_ESTRANGEIROS) : undefined;
-
-    if (!estadoEncontrado && !paisEncontrado) continue;
+    const mencionaRoraima = /\broraima\b/.test(textoCompleto);
+    const mencionaMunicipio = encontrarMencao(textoCompleto, MUNICIPIOS_RORAIMA);
+    if (mencionaRoraima || mencionaMunicipio) continue; // menciona o estado/um município — editoria local é válida
 
     const editoriaErrada = noticia.editoria;
-    const motivo = estadoEncontrado ? `menciona o estado "${estadoEncontrado}"` : `menciona o país "${paisEncontrado}"`;
+
+    // Só pra dar um motivo mais específico no log quando dá — a decisão em
+    // si já foi tomada acima (não menciona Roraima/município nenhum).
+    const estadoEncontrado = encontrarMencao(textoCompleto, OUTROS_ESTADOS);
+    const paisEncontrado = !estadoEncontrado ? encontrarMencao(textoCompleto, PAISES_ESTRANGEIROS) : undefined;
+    const motivo = estadoEncontrado
+      ? `menciona o estado "${estadoEncontrado}"`
+      : paisEncontrado
+        ? `menciona o país "${paisEncontrado}"`
+        : `não menciona Roraima nem nenhum município do estado`;
 
     console.log(`→ [${noticia.status}] "${noticia.titulo}"`);
-    console.log(`  estava em "${editoriaErrada}", mas ${motivo} (sem menção a Roraima) — corrigindo pra "brasil_mundo"...`);
+    console.log(`  estava em "${editoriaErrada}", mas ${motivo} — corrigindo pra "brasil_mundo"...`);
 
     const palavraChave = noticia.tags?.[0] || "noticia internacional";
     let imagem;

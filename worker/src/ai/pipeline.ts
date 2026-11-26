@@ -547,21 +547,27 @@ const MUNICIPIOS_RORAIMA = [
  * cidade sem o nome do estado junto) passa reto por ela.
  *
  * Esta trava inverte a lógica pra uma exigência POSITIVA, sem essa brecha:
- * uma fonte do tipo "busca" só pode entregar editoria local (política,
- * polícia, economia etc.) se o próprio texto mencionar Roraima, Boa Vista
- * ou um dos outros 14 municípios do estado. Não há lista de "o que
- * bloquear" pra manter atualizada — não importa se é Minas, EUA ou
+ * uma matéria só pode entregar editoria local (política, polícia, economia
+ * etc.) se o próprio texto mencionar Roraima, Boa Vista ou um dos outros 14
+ * municípios do estado. Não há lista de "o que bloquear" pra manter
+ * atualizada — não importa se é Minas, EUA, Congo, Coreia do Norte ou
  * qualquer lugar nunca listado, se não fala de Roraima, vira "brasil_mundo".
  *
- * Restrita a fonteTipo === "busca" de propósito: fontes RSS/HTML são URL
- * fixa de veículo local já escolhido a dedo (Folha de Boa Vista, PCRR,
- * Prefeitura etc.) — uma nota curta de agenda pode não repetir "Roraima"
- * ou "Boa Vista" no texto e isso é normal, não indica erro de fonte.
- * "Busca" é o único tipo sem URL fixa (pesquisa aberta via IA) e o único
- * com casos reais comprovados de trazer resultado de fora.
+ * ALCANCE AMPLIADO (26/11/2026, flagrado por Valter com printa do site no
+ * ar): esta trava nasceu restrita a fonteTipo === "busca" — a suposição era
+ * que fonte RSS/HTML, por ser URL fixa de veículo escolhido a dedo (Folha de
+ * Boa Vista, PCRR, Prefeitura etc.), nunca traria conteúdo de fora. Essa
+ * suposição se mostrou FALSA na prática: a editoria "Política" do site
+ * encheu de matéria que não menciona nenhum estado/país listado nas travas
+ * negativas (ex.: "Trump pressiona Nvidia", "Epidemia de ebola no Congo",
+ * "Cinco bombardeiros russos Tu-160") — tudo vindo de fonte RSS, não
+ * "busca", e por isso escapando ileso desta trava antes. A trava agora roda
+ * pra QUALQUER tipo de fonte, sem exceção — o pequeno risco de uma nota
+ * local curta não repetir "Roraima"/"Boa Vista" no texto (e sair
+ * reclassificada por engano) é preferível, de longe, ao risco já comprovado
+ * de publicar fato de fora como se fosse local.
  */
 async function travarBuscaSemMencaoDeRoraima(item: ItemBruto, resumo: ResumoGemini): Promise<void> {
-  if (item.fonteTipo !== "busca") return;
   if (!EDITORIAS_LOCAIS.includes(resumo.editoriaSugerida)) return;
 
   const textoCompleto = normalizarTexto(`${item.tituloOriginal} ${item.conteudoBruto} ${resumo.topicos.join(" ")}`);
@@ -587,7 +593,7 @@ async function travarBuscaSemMencaoDeRoraima(item: ItemBruto, resumo: ResumoGemi
   if (!(await jaInformouHoje("Editor-chefe", marcador))) {
     await informar(
       "Editor-chefe",
-      `Travei uma classificação errada antes de publicar: a triagem sugeriu "${editoriaErrada}" pra uma matéria de "${item.fonteNome}" (fonte do tipo "Busca") que não menciona Roraima, Boa Vista nem nenhum outro município do estado em nenhum momento do texto. Como essa editoria é só pra conteúdo local, troquei pra "brasil_mundo" automaticamente — mesmo sem citar outro estado específico, o fato simplesmente não é daqui.`,
+      `Travei uma classificação errada antes de publicar: a triagem sugeriu "${editoriaErrada}" pra uma matéria de "${item.fonteNome}" que não menciona Roraima, Boa Vista nem nenhum outro município do estado em nenhum momento do texto. Como essa editoria é só pra conteúdo local, troquei pra "brasil_mundo" automaticamente — mesmo sem citar outro estado/país específico, o fato simplesmente não é daqui.`,
       { fonte: item.fonteNome, url: item.url, editoriaSugeridaPelaIA: editoriaErrada, marcador }
     );
   }
